@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a0a0f"/>
+      <stop offset="45%" stop-color="#15122a"/>
+      <stop offset="100%" stop-color="#0b1a2e"/>
+    </linearGradient>
+    <radialGradient id="nebula" cx="30%" cy="40%" r="50%">
+      <stop offset="0%" stop-color="#5c3cb4" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#5c3cb4" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="nebula2" cx="80%" cy="30%" r="40%">
+      <stop offset="0%" stop-color="#285ac8" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#285ac8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="text" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="55%" stop-color="#5ce1ff"/>
+      <stop offset="100%" stop-color="#c77dff"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#nebula)"/>
+  <rect width="1200" height="630" fill="url(#nebula2)"/>
+  <circle cx="140" cy="120" r="1.5" fill="#fff" opacity="0.8"/>
+  <circle cx="320" cy="200" r="1" fill="#fff" opacity="0.6"/>
+  <circle cx="900" cy="150" r="1.5" fill="#fff" opacity="0.9"/>
+  <circle cx="1040" cy="400" r="1" fill="#c8dcff" opacity="0.7"/>
+  <circle cx="700" cy="500" r="1.2" fill="#fff" opacity="0.5"/>
+  <circle cx="200" cy="480" r="1" fill="#fff" opacity="0.7"/>
+  <text x="80" y="280" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="28" fill="#c77dff" letter-spacing="4">SCULL7.COM</text>
+  <text x="80" y="360" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="700" fill="url(#text)">Nathan Sculli</text>
+  <text x="80" y="420" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="28" fill="#9aa3bd">Builder-leader · 20+ years · Rust · Distributed Systems</text>
+  <rect x="80" y="470" width="180" height="36" rx="8" fill="rgba(92,225,255,0.12)" stroke="#5ce1ff" stroke-opacity="0.4"/>
+  <text x="100" y="494" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#5ce1ff">NORMAL  README.md</text>
+</svg>

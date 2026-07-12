@@ -1,0 +1,16 @@
+{
+  "name": "scull7.com",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Nathan Sculli resume site — glassmorphic galaxy + vim UX",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:astra": "astra dev --port 7777",
+    "build": "astra build --out ./dist",
+    "preview": "npx --yes serve dist -l 4173"
+  },
+  "keywords": ["resume", "portfolio", "astra", "vim"],
+  "author": "Nathan Sculli <nathan@vegasbuckeye.com>",
+  "license": "MIT"
+}
