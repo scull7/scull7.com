@@ -57,62 +57,21 @@ body {
   overflow-x: hidden;
 }
 
-/* Hide default Astra chrome when present */
-.sol-sidebar,
-.sol-nav,
-.sol-footer,
-aside.sidebar,
-nav.navbar,
-header.site-header,
-header.nav-bar,
-.nav-bar,
-.theme-toggle,
-footer.footer,
-footer.site-footer,
-.site-footer,
-.layout-home > header,
-.layout > header,
-#app > .layout > header,
-.sidebar,
-.toc,
-.prev-next,
-.mobile-sidebar {
-  display: none !important;
-  height: 0 !important;
-  overflow: hidden !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
+#app {
+  margin: 0;
+  padding: 0;
+  max-width: none;
+  width: 100%;
+  min-height: 100dvh;
+  background: transparent;
 }
 
-/* Full-bleed home content for vim shell */
-.layout-home,
-.home-content,
-.layout,
-#app,
-.home-content main,
-main.home-content {
-  margin: 0 !important;
-  padding: 0 !important;
-  max-width: none !important;
-  width: 100% !important;
-  background: transparent !important;
-  min-height: 100dvh !important;
-}
-
-/* Keep Astra light theme from washing out galaxy */
 html,
-html.light,
 html.dark,
-html[data-theme="light"],
 html[data-theme="dark"],
 body {
-  background: var(--bg-void) !important;
-  color: var(--text) !important;
-  --bg-color: var(--bg-void) !important;
-  --text-color: var(--text) !important;
-  --text-muted: var(--text-dim) !important;
-  --sidebar-bg: transparent !important;
-  --border-color: var(--glass-border) !important;
+  background: var(--bg-void);
+  color: var(--text);
 }
 
 /* vim-root owns the viewport */
@@ -190,6 +149,7 @@ a:hover {
 
 /* Glass panel primitive */
 .glass {
+  background: rgba(14, 16, 28, 0.92);
   background: var(--bg-panel);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
@@ -199,12 +159,23 @@ a:hover {
 }
 
 .glass-strong {
+  background: rgba(18, 20, 36, 0.94);
   background: var(--bg-panel-strong);
   border: 1px solid var(--glass-border-hot);
   border-radius: var(--radius);
   backdrop-filter: blur(22px) saturate(160%);
   -webkit-backdrop-filter: blur(22px) saturate(160%);
   box-shadow: var(--shadow-glow);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass {
+    background: rgba(14, 16, 28, 0.94);
+  }
+
+  .glass-strong {
+    background: rgba(18, 20, 36, 0.96);
+  }
 }
 
 .pill {
@@ -245,5 +216,11 @@ a:hover {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+
+  .galaxy::before,
+  .galaxy::after,
+  .relay-packet {
+    animation: none !important;
   }
 }
