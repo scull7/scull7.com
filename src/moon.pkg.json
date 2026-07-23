@@ -1,0 +1,43 @@
+{
+  "is-main": true,
+  "supported-targets": "js",
+  "import": [
+    {
+      "path": "mizchi/luna/js/resource",
+      "alias": "resource"
+    },
+    {
+      "path": "mizchi/signals",
+      "alias": "signal"
+    },
+    {
+      "path": "mizchi/luna/dom",
+      "alias": "dom"
+    },
+    {
+      "path": "mizchi/js_browser/dom",
+      "alias": "js_dom"
+    },
+    {
+      "path": "mizchi/js/core",
+      "alias": "js"
+    },
+    {
+      "path": "mizchi/js/web/http",
+      "alias": "http"
+    },
+    {
+      "path": "mizchi/js/mbtconv",
+      "alias": "mbtconv"
+    },
+    {
+      "path": "moonbitlang/core/json",
+      "alias": "json"
+    }
+  ],
+  "link": {
+    "js": {
+      "format": "esm"
+    }
+  }
+}

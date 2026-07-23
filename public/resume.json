@@ -1,0 +1,443 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jsonresume/resume-schema/v1.0.0/schema.json",
+  "meta": {
+    "canonical": "https://scull7.com/resume.json",
+    "version": "1.0.0",
+    "lastModified": "2026-07-12T00:00:00"
+  },
+  "basics": {
+    "name": "Nathan Sculli",
+    "label": "Builder-leader · 20+ years · Rust · Distributed Systems",
+    "image": "",
+    "email": "nathan@vegasbuckeye.com",
+    "phone": "",
+    "url": "https://scull7.com",
+    "summary": "Director of Engineering at TensorWave, primary individual contributor on the Relay service that enabled delivery of the largest AMD-based GPU clouds in record time.\n\nOver twenty years building and leading across AI infrastructure, financial services, ML and data platforms, manufacturing, and SaaS.\nEqually effective scaling teams of more than one hundred engineers across a career and architecting deep systems in Rust, OCaml, ReasonML, Haskell, and JavaScript.\nFounder and CTO experience across three ventures.",
+    "location": {
+      "address": "",
+      "postalCode": "",
+      "city": "Las Vegas",
+      "countryCode": "US",
+      "region": "NV"
+    },
+    "profiles": [
+      {
+        "network": "LinkedIn",
+        "username": "scull7",
+        "url": "https://linkedin.com/in/scull7"
+      },
+      {
+        "network": "GitHub",
+        "username": "scull7",
+        "url": "https://github.com/scull7"
+      },
+      {
+        "network": "Crates.io",
+        "username": "scull7",
+        "url": "https://crates.io/users/scull7"
+      }
+    ]
+  },
+  "work": [
+    {
+      "name": "TensorWave",
+      "position": "Director of Engineering",
+      "location": "Las Vegas, NV",
+      "url": "https://tensorwave.com",
+      "startDate": "2024-04",
+      "summary": "Primary IC and engineering leader for GPU cloud infrastructure.",
+      "highlights": [
+        "Primary IC on the Relay service, enabling delivery of the largest AMD-based GPU clouds in record time",
+        "Lead the software development organization; architect and oversee company-wide software projects",
+        "Primary IC on the Event API"
+      ],
+      "endDate": "",
+      "description": ""
+    },
+    {
+      "name": "Sub Zero Corp",
+      "position": "Founder / CTO",
+      "location": "Las Vegas, NV",
+      "startDate": "2023-04",
+      "endDate": "2024-05",
+      "summary": "Founder-led SaaS for youth sports organizations.",
+      "highlights": [
+        "Sole IC on a web-based SaaS platform for youth sports organizations"
+      ],
+      "url": "",
+      "description": ""
+    },
+    {
+      "name": "Banner",
+      "position": "Sr. Software Engineer",
+      "location": "New York, NY (remote)",
+      "url": "https://withbanner.com",
+      "startDate": "2022-01",
+      "endDate": "2023-04",
+      "summary": "Performance and infrastructure work on the Banner product.",
+      "highlights": [
+        "Cut React web build time from 10 minutes to under 1 minute",
+        "Fixed concurrency bugs in MongoDB call paths",
+        "DevOps infrastructure design and implementation"
+      ],
+      "description": ""
+    },
+    {
+      "name": "Backtrace.io",
+      "position": "Sr. Software Engineer",
+      "location": "New York, NY (remote)",
+      "description": "A SauceLabs company",
+      "startDate": "2020-11",
+      "endDate": "2022-02",
+      "summary": "Console modernization and platform services.",
+      "highlights": [
+        "Modernized the console web application's ReasonML code; delivered I18N / L10N",
+        "Built a new email service infrastructure"
+      ],
+      "url": ""
+    },
+    {
+      "name": "Marker Trax, LLC",
+      "position": "Chief Solutions Architect",
+      "location": "Las Vegas, NV",
+      "startDate": "2019-07",
+      "endDate": "2020-08",
+      "summary": "Casino credit OEM product architecture and certification.",
+      "highlights": [
+        "Architected a casino-credit OEM product; drove it through certification for casino infrastructure",
+        "Generalized product for all major gaming machine manufacturers; shipped web and mobile apps"
+      ],
+      "url": "",
+      "description": ""
+    },
+    {
+      "name": "Influential",
+      "position": "VP of Engineering",
+      "location": "Las Vegas, NV",
+      "url": "https://influential.co",
+      "startDate": "2014-10",
+      "endDate": "2019",
+      "summary": "Series-A co-founder engineering leadership for influencer data platform.",
+      "highlights": [
+        "Co-built a data platform that scanned, classified and searched billions of pieces of online content in real time",
+        "Managed 20–30 software engineers as direct reports; owned Series-A technical due diligence",
+        "Overall software architecture across back-end services and front-end"
+      ],
+      "description": ""
+    },
+    {
+      "name": "Allegiant Air",
+      "position": "Manager of Application Development",
+      "location": "Las Vegas, NV",
+      "startDate": "2013-07",
+      "endDate": "2014-09",
+      "summary": "Application development management and airline identity systems.",
+      "highlights": [
+        "Designed and implemented airline SSO using PAKE, PAM and SASL",
+        "Managed 5–7 full life-cycle teams (PM, QA, Engineer); instituted company-wide SDLC"
+      ],
+      "url": "",
+      "description": ""
+    },
+    {
+      "name": "Dinar Trade, Inc.",
+      "position": "Software Architect",
+      "location": "Las Vegas, NV",
+      "startDate": "2012-05",
+      "endDate": "2013-05",
+      "summary": "Company and e-commerce platform rewrite.",
+      "highlights": [
+        "Managed 4 senior engineers; personally implemented complete company + e-commerce rewrite"
+      ],
+      "url": "",
+      "description": ""
+    },
+    {
+      "name": "eCommLink",
+      "position": "Sr. Software Engineer",
+      "location": "Las Vegas, NV",
+      "startDate": "2007-12",
+      "endDate": "2011-06",
+      "summary": "Financial services security and UX systems.",
+      "highlights": [
+        "Sole author of a PCI-DSS compliant, OpenBSD-based virtual HSM using MFA tokens and encrypted RAM-disk key storage",
+        "Architected a JS framework (jQuery / jQueryUI) that let a team of 3 outpace a 10× larger team on financial-services UX (Discover, Inc.); IE6+ supported"
+      ],
+      "url": "",
+      "description": ""
+    },
+    {
+      "name": "Decoma SVE",
+      "position": "Project Coordinator / Programmer",
+      "location": "Auburn Hills, MI",
+      "description": "Magna International",
+      "startDate": "2007-04",
+      "endDate": "2007-11",
+      "summary": "Manufacturing execution and industrial robotics.",
+      "highlights": [
+        "Architected MES system orchestrating robotic cells, plant-floor SCADA, and yard-management — reduced line failure rate by 98%",
+        "Industrial robot control / PLC integration; robotic vision; AGV / material-handling"
+      ],
+      "url": ""
+    },
+    {
+      "name": "Jamestown Industries, Inc",
+      "position": "Technology Director",
+      "location": "Youngstown, OH",
+      "startDate": "2005-06",
+      "endDate": "2007-04",
+      "summary": "Plant operations technology leadership.",
+      "highlights": [
+        "Architected all plant-operation infrastructure: robot control, PLC, MES/SCADA, vision, AGV",
+        "Managed 6-person tech staff across 2 locations; sole author of internal web portals and reporting tools"
+      ],
+      "url": "",
+      "description": ""
+    }
+  ],
+  "education": [
+    {
+      "institution": "Youngstown State University",
+      "area": "Computer Science",
+      "studyType": "Coursework toward BS",
+      "startDate": "2001",
+      "endDate": "2006"
+    },
+    {
+      "institution": "Cisco Networking Academy at Youngstown State University",
+      "area": "Networking",
+      "studyType": "CCNA",
+      "startDate": "2006",
+      "endDate": "2006"
+    }
+  ],
+  "certificates": [
+    {
+      "name": "CCNA",
+      "date": "2006",
+      "issuer": "Cisco Networking Academy at Youngstown State University"
+    }
+  ],
+  "skills": [
+    {
+      "name": "Engineering Leadership",
+      "level": "Expert",
+      "keywords": [
+        "Engineering Leadership",
+        "Founder / CTO",
+        "Org Design",
+        "SDLC"
+      ]
+    },
+    {
+      "name": "AI / GPU Infrastructure",
+      "level": "Advanced",
+      "keywords": [
+        "AI / GPU Infrastructure",
+        "Distributed Systems Architecture",
+        "Relay",
+        "Event APIs"
+      ]
+    },
+    {
+      "name": "Languages (active)",
+      "level": "Advanced",
+      "keywords": [
+        "Rust",
+        "OCaml",
+        "ReasonML",
+        "JavaScript",
+        "Haskell",
+        "Swift",
+        "Dhall"
+      ]
+    },
+    {
+      "name": "Languages (prior)",
+      "level": "Intermediate",
+      "keywords": [
+        "Erlang",
+        "PHP",
+        "Python",
+        "Java"
+      ]
+    },
+    {
+      "name": "Web / UI",
+      "level": "Advanced",
+      "keywords": [
+        "React",
+        "React Native",
+        "ReasonReact",
+        "Elm",
+        "Vue.js",
+        "HTML",
+        "CSS"
+      ]
+    },
+    {
+      "name": "Data",
+      "level": "Advanced",
+      "keywords": [
+        "MySQL",
+        "PostgreSQL",
+        "Elasticsearch",
+        "CouchDB/Couchbase",
+        "ArangoDB",
+        "RethinkDB"
+      ]
+    },
+    {
+      "name": "Infrastructure",
+      "level": "Advanced",
+      "keywords": [
+        "Linux",
+        "OpenBSD",
+        "macOS",
+        "NGINX",
+        "Docker",
+        "Kubernetes"
+      ]
+    },
+    {
+      "name": "Cloud",
+      "level": "Advanced",
+      "keywords": [
+        "AWS",
+        "DigitalOcean",
+        "Linode"
+      ]
+    },
+    {
+      "name": "CI / CD",
+      "level": "Intermediate",
+      "keywords": [
+        "Travis CI",
+        "Kubernetes"
+      ]
+    },
+    {
+      "name": "Industrial Systems",
+      "level": "Advanced",
+      "keywords": [
+        "Industrial Robotics & MES/SCADA",
+        "PLC",
+        "AGV",
+        "Robotic Vision"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "cents",
+      "description": "Integer-cents library for financial ledgers — avoids floating-point money errors.",
+      "url": "https://crates.io/crates/cents",
+      "keywords": [
+        "Rust",
+        "finance",
+        "open-source"
+      ],
+      "type": "application",
+      "roles": [
+        "Author"
+      ],
+      "entity": ""
+    },
+    {
+      "name": "bs-result",
+      "description": "Full-featured Result type — category-theory primitives used to teach engineers.",
+      "url": "https://scull7.github.io/bs-result/",
+      "keywords": [
+        "ReasonML",
+        "open-source"
+      ],
+      "type": "application",
+      "roles": [
+        "Author"
+      ],
+      "entity": ""
+    },
+    {
+      "name": "bs-sql-composer",
+      "description": "Composable SQL statements; production use at Influential for dependent object sub-graphs.",
+      "url": "https://redex.github.io/package/bs-sql-composer",
+      "keywords": [
+        "ReasonML",
+        "SQL",
+        "open-source"
+      ],
+      "type": "application",
+      "roles": [
+        "Author"
+      ],
+      "entity": ""
+    },
+    {
+      "name": "bs-sql-common",
+      "description": "Multi-driver SQL interface (MySQL, SQLite) with shared semantics.",
+      "url": "https://redex.github.io/package/bs-sql-common",
+      "keywords": [
+        "ReasonML",
+        "SQL",
+        "open-source"
+      ],
+      "type": "application",
+      "roles": [
+        "Author"
+      ],
+      "entity": ""
+    },
+    {
+      "name": "bs-mysql2",
+      "description": "First ReasonML mysql2 bindings — used in production at Influential.",
+      "url": "https://redex.github.io/package/bs-mysql2",
+      "keywords": [
+        "ReasonML",
+        "MySQL",
+        "open-source"
+      ],
+      "type": "application",
+      "roles": [
+        "Author"
+      ],
+      "entity": ""
+    },
+    {
+      "name": "TensorWave Relay",
+      "description": "GPU cloud control-plane service enabling delivery of the largest AMD-based GPU clouds in record time.",
+      "keywords": [
+        "Rust",
+        "distributed-systems",
+        "GPU"
+      ],
+      "type": "application",
+      "entity": "TensorWave",
+      "roles": [
+        "Primary IC",
+        "Director of Engineering"
+      ],
+      "url": ""
+    }
+  ],
+  "interests": [
+    {
+      "name": "Core competencies",
+      "keywords": [
+        "Engineering Leadership",
+        "AI / GPU Infrastructure",
+        "Distributed Systems Architecture",
+        "Industrial Robotics & MES/SCADA",
+        "Rust",
+        "OCaml & ReasonML",
+        "Founder / CTO",
+        "Open Source Author"
+      ]
+    }
+  ],
+  "languages": [
+    {
+      "language": "English",
+      "fluency": "Native speaker"
+    }
+  ]
+}
