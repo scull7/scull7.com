@@ -1,30 +1,32 @@
 {
   "name": "scull7.com",
   "private": true,
-  "version": "0.2.0",
-  "description": "Nathan Sculli resume site — Luna UI (MoonBit) · glassmorphic galaxy · vim UX",
+  "version": "0.3.0",
+  "description": "Nathan Sculli resume site — Elm · ReScript ports · glassmorphic galaxy · vim UX",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "moon build --target js --release && vite build",
+    "res:build": "rescript",
+    "res:watch": "rescript -w",
+    "elm:make": "elm make src/elm/Main.elm --output=/dev/null",
+    "dev": "concurrently -k -n res,vite -c magenta,cyan \"rescript -w\" \"vite\"",
+    "build": "rescript && vite build",
     "preview": "vite preview",
-    "moon:build": "moon build --target js --release",
-    "moon:check": "moon check --target js",
-    "test:unit": "moon test --target js",
     "test:e2e": "node e2e/run.mjs",
     "test:e2e:only": "node e2e/navigation.mjs",
-    "test": "npm run test:unit && npm run test:e2e"
+    "test": "npm run elm:make && npm run test:e2e"
   },
   "devDependencies": {
+    "concurrently": "^9.2.0",
     "playwright": "^1.49.0",
+    "rescript": "^11.1.4",
     "vite": "^6.0.0",
-    "vite-plugin-moonbit": "^0.3.0"
+    "vite-plugin-elm": "^3.0.1"
   },
   "keywords": [
     "resume",
     "portfolio",
-    "luna",
-    "moonbit",
+    "elm",
+    "rescript",
     "vim",
     "jsonresume"
   ],

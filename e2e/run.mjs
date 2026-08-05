@@ -1,6 +1,5 @@
 /**
  * Build (optional) + vite preview + e2e/navigation.mjs
- * Usage: node e2e/run.mjs
  */
 import { spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -14,7 +13,7 @@ function run(cmd, args, opts = {}) {
     const child = spawn(cmd, args, {
       cwd: ROOT,
       stdio: "inherit",
-      env: { ...process.env, PATH: `${process.env.HOME}/.moon/bin:${process.env.PATH}` },
+      env: process.env,
       ...opts,
     });
     child.on("error", reject);
@@ -82,6 +81,5 @@ try {
       }
     }
   }
-  // ensure we don't hang on open handles
   setTimeout(() => process.exit(process.exitCode ?? 0), 100).unref();
 }

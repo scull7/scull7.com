@@ -1,0 +1,16 @@
+{
+  "name": "scull7-site",
+  "sources": {
+    "dir": "src/rescript",
+    "subdirs": true
+  },
+  "package-specs": {
+    "module": "esmodule",
+    "in-source": true
+  },
+  "suffix": ".res.js",
+  "bs-dependencies": [],
+  "warnings": {
+    "error": true
+  }
+}
