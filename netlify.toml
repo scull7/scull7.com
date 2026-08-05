@@ -4,8 +4,8 @@
 
 [build.environment]
   NODE_VERSION = "20"
-  # Skip Playwright browser download on Netlify (e2e is local/CI only)
   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1"
+  ELM_HOME = "/opt/buildhome/.elm"
 
 [[headers]]
   for = "/*"

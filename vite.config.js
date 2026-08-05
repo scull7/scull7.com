@@ -1,13 +1,15 @@
 import { defineConfig } from "vite";
-import { moonbit } from "vite-plugin-moonbit";
+import elmPlugin from "vite-plugin-elm";
 
-export default defineConfig(({ command }) => ({
+export default defineConfig({
   plugins: [
-    moonbit({
-      // Watch only in dev; Netlify/CI must not hang on a watcher.
-      watch: command === "serve",
-      showLogs: true,
+    elmPlugin({
+      debug: false,
+      optimize: process.env.NODE_ENV === "production",
     }),
   ],
   publicDir: "public",
-}));
+  build: {
+    target: "es2020",
+  },
+});

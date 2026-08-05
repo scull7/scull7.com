@@ -1,23 +1,20 @@
 #!/usr/bin/env bash
-# Netlify build: install MoonBit toolchain, fetch deps, produce dist/
+# Netlify build: Elm + ReScript + Vite → dist/
 set -euo pipefail
 
-export PATH="${HOME}/.moon/bin:${PATH}"
+export PATH="${HOME}/.local/bin:${PATH}"
 
-if ! command -v moon >/dev/null 2>&1; then
-  echo "→ Installing MoonBit CLI"
-  curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-  export PATH="${HOME}/.moon/bin:${PATH}"
+if ! command -v elm >/dev/null 2>&1; then
+  echo "→ Installing Elm"
+  npm install -g elm@0.19.1-6 || npx --yes elm@0.19.1-6 --version
+  export PATH="$(npm root -g)/../bin:${PATH}"
 fi
 
-echo "→ moon version"
-moon version
+echo "→ elm version"
+elm --version || npx elm --version
 
-echo "→ moon update (deps)"
-moon update
-
-echo "→ moon build --target js --release"
-moon build --target js --release
+echo "→ rescript"
+npx rescript
 
 echo "→ vite build"
 npx vite build
