@@ -2,7 +2,7 @@
 
 Nathan Sculli — personal resume site.
 
-**Stack:** [Elm](https://elm-lang.org) UI · [ReScript](https://rescript-lang.org) ports/bootstrap · Vite · vanilla CSS · vim UX  
+**Stack:** [Elm](https://elm-lang.org) UI · [Melange](https://melange.re) ports (OCaml→JS) · Vite · vanilla CSS · vim UX  
 **Data:** [JSON Resume](https://jsonresume.org) (`public/resume.json`)  
 **Deploy:** Netlify → https://scull7.com
 
@@ -11,23 +11,35 @@ Nathan Sculli — personal resume site.
 ```bash
 # Elm 0.19.1
 npm install -g elm
-# or: https://guide.elm-lang.org/install/elm.html
+
+# opam (OCaml package manager) — required for Melange
+# https://opam.ocaml.org/doc/Install.html
+opam --version
 
 node -v   # 20+
+```
+
+## One-time setup
+
+```bash
+npm install
+# Create local opam switch + install Melange/Dune (first run is slow)
+npm run opam:init
+# or, if switch already exists:
+npm run opam:deps
 ```
 
 ## Quick start
 
 ```bash
-npm install
-npm run dev      # ReScript watch + Vite → http://localhost:5173
+npm run dev      # Melange watch + Vite → http://localhost:5173
 npm run build
 npm run preview
 ```
 
-**No TypeScript. No app-level plain JavaScript UI.**  
-- UI and state: Elm  
-- Browser interop (focus, scroll, key preventDefault): ReScript ports  
+**No TypeScript. No ReScript.**  
+- UI and state: **Elm**  
+- Browser interop (focus, blur, scroll, key preventDefault): **Melange** (OCaml)  
 
 ## Structure
 
@@ -35,51 +47,45 @@ npm run preview
 src/elm/
   Main.elm           # shell, keyboard, palette, terminal
   Resume.elm         # JSON Resume decode + map
-  Format.elm         # dates, slugify
-  Buffers.elm        # buffer catalog + code samples
-  Fuzzy.elm          # palette ranking
-  Highlight.elm      # lightweight syntax tint
-  Views.elm          # buffer body views
-  Ports.elm          # focus, scrollBuffer
-src/rescript/
-  Main.res           # boot Elm + port wiring
+  Format.elm / Buffers.elm / Fuzzy.elm / Highlight.elm / Views.elm / Ports.elm
+src/melange/
+  main.ml            # boot Elm + port wiring (Melange)
+  dune               # melange.emit → _build/.../main.js
+src/main.js          # Vite entry imports Melange output
 public/
   resume.json
   styles/{galaxy,vim}.css
+dune-project
+scull7.opam
 ```
 
 ## Vim UX
 
-Palette-primary (Option B): `:` / `/` open the command palette; the bottom cmdline **echoes** what you type.
-
-```
-NORMAL  --:-->  COMMAND (palette)  --Esc--> NORMAL
-NORMAL  --/-->  SEARCH  (palette)  --Esc--> NORMAL
-```
+Palette-primary: `:` / `/` open the command palette; the bottom cmdline **echoes** what you type.
 
 | Key / command | Action |
 |---|---|
 | `j` `k` / arrows | Move buffer focus |
-| `gg` / `G` | Top / bottom (`g` pending clears ~600ms) |
-| `/` | Fuzzy search palette |
-| `:` | Command palette |
-| `Ctrl-[` `Ctrl-c` | Esc synonyms |
-| `Ctrl-f` `Ctrl-b` | Page buffer body |
-| `z` | Center buffer scroll |
-| `:help` `:ls` `:e` `:open` `:q` | Buffer commands |
-| `Enter` / `Esc` | Open / cancel |
-| Terminal input focused | Shell keys ignored |
+| `gg` / `G` | Top / bottom |
+| `/` `:` | Search / command palette |
+| `Esc` `Ctrl-[` | Cancel |
+| Terminal buffer | Input autofocused |
 
 ## Testing
 
 ```bash
 npm test                 # elm make + build + Playwright e2e
-npm run test:e2e
 npx playwright install chromium   # once
 ```
 
-## Resume data
+## Melange notes
+
+Ports (`focus`, `blur`, `scrollBuffer`) are defined in Elm and subscribed in
+`src/melange/main.ml`. Build with:
 
 ```bash
-npx resume-cli validate public/resume.json
+npm run melange          # opam exec -- dune build @site
 ```
+
+Output: `_build/default/src/melange/output/src/melange/main.js`  
+Runtime packages: npm `melange` + `melange.js`.

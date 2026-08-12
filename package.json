@@ -1,24 +1,28 @@
 {
   "name": "scull7.com",
   "private": true,
-  "version": "0.3.0",
-  "description": "Nathan Sculli resume site — Elm · ReScript ports · glassmorphic galaxy · vim UX",
+  "version": "0.4.0",
+  "description": "Nathan Sculli resume site — Elm · Melange ports · glassmorphic galaxy · vim UX",
   "type": "module",
   "scripts": {
-    "res:build": "rescript",
-    "res:watch": "rescript -w",
+    "melange": "opam exec -- dune build @site",
+    "melange:watch": "opam exec -- dune build @site --watch",
     "elm:make": "elm make src/elm/Main.elm --output=/dev/null",
-    "dev": "concurrently -k -n res,vite -c magenta,cyan \"rescript -w\" \"vite\"",
-    "build": "rescript && vite build",
+    "dev": "npm run melange && concurrently -k -n mel,vite -c magenta,cyan \"npm run melange:watch\" \"vite\"",
+    "build": "npm run melange && vite build",
     "preview": "vite preview",
+    "opam:init": "opam switch create . 5.2.0 -y --no-install && opam install . --deps-only -y && npm install",
+    "opam:deps": "opam install . --deps-only -y",
     "test:e2e": "node e2e/run.mjs",
     "test:e2e:only": "node e2e/navigation.mjs",
     "test": "npm run elm:make && npm run test:e2e"
   },
+  "dependencies": {
+    "melange": "7.0.1"
+  },
   "devDependencies": {
     "concurrently": "^9.2.0",
     "playwright": "^1.49.0",
-    "rescript": "^11.1.4",
     "vite": "^6.0.0",
     "vite-plugin-elm": "^3.0.1"
   },
@@ -26,7 +30,8 @@
     "resume",
     "portfolio",
     "elm",
-    "rescript",
+    "melange",
+    "ocaml",
     "vim",
     "jsonresume"
   ],

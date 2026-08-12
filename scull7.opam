@@ -1,0 +1,16 @@
+opam-version: "2.0"
+synopsis: "Scull7.com Melange ports"
+description: "Elm resume site — Melange JS interop for ports"
+maintainer: ["Nathan Sculli <nathan@vegasbuckeye.com>"]
+authors: ["Nathan Sculli"]
+license: "MIT"
+homepage: "https://scull7.com"
+bug-reports: "https://github.com/scull7/scull7.com/issues"
+depends: [
+  "ocaml" {>= "5.2.0" & < "5.3"}
+  "dune" {>= "3.21"}
+  "melange" {>= "7.0.0"}
+]
+build: [
+  ["dune" "build" "-p" name "-j" jobs "@site"]
+]

@@ -12,6 +12,9 @@ lib/
 .netlify/
 *.log
 _build/
+_opam/
 .mooncakes/
 target/
 pnpm-lock.yaml
+rescript.json
+src/rescript/
