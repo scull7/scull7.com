@@ -1,0 +1,8 @@
+(melange.emit
+ (target output)
+ (alias site)
+ (modules main)
+ (libraries melange.js melange.dom)
+ (preprocess
+  (pps melange.ppx))
+ (module_systems es6))
