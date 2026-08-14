@@ -41,7 +41,7 @@ async function main() {
     );
     assert(expBody !== homeBody, "body text unchanged after experience click");
 
-    await page.locator("#buffer-items .buffer-item", { hasText: "skills.md" }).click();
+    await page.locator("#buffer-items .buffer-item .name", { hasText: /^skills\.md$/ }).click();
     await page.waitForTimeout(350);
     const skillsBody = await page.locator("#buffer-body").innerText();
     assert(skillsBody !== expBody, "body text unchanged after skills click");
