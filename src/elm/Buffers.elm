@@ -1,12 +1,15 @@
 module Buffers exposing
     ( Buffer
     , BufferKind(..)
-    , all
+    , catalog
     , codeSample
+    , core
     , find
     , findByQuery
     , indexOf
     )
+
+import Resume exposing (View)
 
 
 type BufferKind
@@ -15,6 +18,7 @@ type BufferKind
     | Highlights
     | Skills
     | OpenSource
+    | CrossrSkills
     | Code
     | Relay
     | Terminal
@@ -31,8 +35,8 @@ type alias Buffer =
     }
 
 
-all : List Buffer
-all =
+core : List Buffer
+core =
     [ { id = "README.md", icon = "📄", kind = Home, label = "README.md", badge = "home", sample = "" }
     , { id = "experience.md", icon = "💼", kind = Experience, label = "experience.md", badge = "work", sample = "" }
     , { id = "highlights.md", icon = "✦", kind = Highlights, label = "highlights.md", badge = "proof", sample = "" }
@@ -47,14 +51,49 @@ all =
     ]
 
 
-find : String -> Maybe Buffer
-find id =
-    List.filter (\b -> b.id == id) all |> List.head
+crossrSkillsBuffer : Buffer
+crossrSkillsBuffer =
+    { id = "crossr-skills.md"
+    , icon = "◇"
+    , kind = CrossrSkills
+    , label = "crossr-skills.md"
+    , badge = "oss"
+    , sample = ""
+    }
 
 
-indexOf : String -> Int
-indexOf id =
-    all
+catalog : View -> List Buffer
+catalog data =
+    case data.crossrSkills of
+        Nothing ->
+            core
+
+        Just _ ->
+            insertAfter "opensource.md" crossrSkillsBuffer core
+
+
+insertAfter : String -> Buffer -> List Buffer -> List Buffer
+insertAfter afterId buf list =
+    case list of
+        [] ->
+            [ buf ]
+
+        x :: xs ->
+            if x.id == afterId then
+                x :: buf :: xs
+
+            else
+                x :: insertAfter afterId buf xs
+
+
+find : List Buffer -> String -> Maybe Buffer
+find buffers id =
+    List.filter (\b -> b.id == id) buffers |> List.head
+
+
+indexOf : List Buffer -> String -> Int
+indexOf buffers id =
+    buffers
         |> List.indexedMap Tuple.pair
         |> List.filter (\( _, b ) -> b.id == id)
         |> List.head
@@ -62,8 +101,8 @@ indexOf id =
         |> Maybe.withDefault 0
 
 
-findByQuery : String -> Maybe Buffer
-findByQuery q =
+findByQuery : List Buffer -> String -> Maybe Buffer
+findByQuery buffers q =
     let
         needle =
             String.toLower q
@@ -79,7 +118,7 @@ findByQuery q =
             in
             id == needle || label == needle || String.startsWith needle label || String.contains needle id
         )
-        all
+        buffers
         |> List.head
 
 

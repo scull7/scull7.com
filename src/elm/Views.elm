@@ -47,6 +47,9 @@ bufferBody data buf termLines onTermSubmit onTermFocus onTermBlur =
         OpenSource ->
             viewOpenSource data
 
+        CrossrSkills ->
+            viewCrossrSkills data
+
         Code ->
             viewCode buf
 
@@ -170,6 +173,43 @@ viewOpenSource data =
                 )
                 data.openSource
         )
+
+
+viewCrossrSkills : View -> Html msg
+viewCrossrSkills data =
+    case data.crossrSkills of
+        Nothing ->
+            text ""
+
+        Just project ->
+            let
+                description =
+                    if String.isEmpty project.description then
+                        []
+
+                    else
+                        [ p [ class "summary" ] [ text project.description ] ]
+
+                link url =
+                    a [ href url, target "_blank", rel "noopener" ] [ text url ]
+
+                links =
+                    [ project.url, project.github ]
+                        |> List.filter (not << String.isEmpty)
+                        |> List.map link
+
+                linkRow =
+                    if List.isEmpty links then
+                        []
+
+                    else
+                        [ div [ class "hero-links" ] links ]
+            in
+            div [ class "oss-card" ]
+                (h2 [ class "section-title" ] [ text project.name ]
+                    :: description
+                    ++ linkRow
+                )
 
 
 viewCode : Buffer -> Html msg

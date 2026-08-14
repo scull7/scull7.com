@@ -173,7 +173,12 @@ armG model =
 
 activeBuf : Model -> Buffer
 activeBuf model =
-    Buffers.find model.activeId |> Maybe.withDefault (List.head Buffers.all |> Maybe.withDefault dummyBuf)
+    let
+        buffers =
+            bufferList model
+    in
+    Buffers.find buffers model.activeId
+        |> Maybe.withDefault (List.head buffers |> Maybe.withDefault dummyBuf)
 
 
 dummyBuf : Buffer
@@ -181,9 +186,19 @@ dummyBuf =
     { id = "README.md", icon = "📄", kind = Buffers.Home, label = "README.md", badge = "home", sample = "" }
 
 
+bufferList : Model -> List Buffer
+bufferList model =
+    case model.resume of
+        Just data ->
+            Buffers.catalog data
+
+        Nothing ->
+            Buffers.core
+
+
 openBuffer : String -> Bool -> Model -> ( Model, Cmd Msg )
 openBuffer id silent model =
-    case Buffers.find id of
+    case Buffers.find (bufferList model) id of
         Nothing ->
             ( setMsg ("E94: No matching buffer for " ++ id) "error" model, Cmd.none )
 
@@ -195,7 +210,7 @@ openBuffer id silent model =
                 m1 =
                     { model
                         | activeId = id
-                        , focusIdx = Buffers.indexOf id
+                        , focusIdx = Buffers.indexOf (bufferList model) id
                         , termFocused = isTerm
                         , mode = Normal
                         , paletteOpen = False
@@ -230,7 +245,7 @@ openByQuery q model =
         ( setMsg "E32: No file name" "error" model, False )
 
     else
-        case Buffers.findByQuery q of
+        case Buffers.findByQuery (bufferList model) q of
             Nothing ->
                 ( setMsg ("E94: No matching buffer for " ++ q) "error" model, False )
 
@@ -246,7 +261,7 @@ moveFocus : Int -> Model -> Model
 moveFocus delta model =
     let
         n =
-            List.length Buffers.all
+            List.length (bufferList model)
 
         next =
             modBy n (model.focusIdx + delta + n)
@@ -288,7 +303,7 @@ runCommand raw model =
                             model
 
                     list =
-                        Buffers.all
+                        bufferList m0
                             |> List.indexedMap
                                 (\i b ->
                                     let
@@ -375,7 +390,7 @@ paletteItems model =
                 |> List.map (\( _, _, item ) -> item )
     in
     if model.paletteMode == "search" then
-        Buffers.all
+        bufferList model
             |> List.indexedMap
                 (\i b -> scoreItem b.label b.badge b.id i)
             |> List.filterMap identity
@@ -398,7 +413,7 @@ paletteItems model =
                     |> List.filterMap identity
 
             bufRows =
-                Buffers.all
+                bufferList model
                     |> List.indexedMap
                         (\i b ->
                             scoreItem (":e " ++ b.label) "open buffer" b.id (i + 100)
@@ -626,7 +641,7 @@ handleKey info model =
                     armG m
 
             "G" ->
-                ( setMsg "G → bottom" "" { m | focusIdx = List.length Buffers.all - 1 }
+                ( setMsg "G → bottom" "" { m | focusIdx = List.length (bufferList m) - 1 }
                 , Cmd.none
                 )
 
@@ -645,7 +660,7 @@ handleKey info model =
 
 openFocused : Model -> ( Model, Cmd Msg )
 openFocused model =
-    case List.drop model.focusIdx Buffers.all |> List.head of
+    case List.drop model.focusIdx (bufferList model) |> List.head of
         Just b ->
             openBuffer b.id False model
 
@@ -701,7 +716,7 @@ handleTerm raw model =
                             "loading…"
 
                 "ls" ->
-                    Buffers.all |> List.map .label |> String.join "  "
+                    bufferList model |> List.map .label |> String.join "  "
 
                 "open" ->
                     termOpen arg m1
@@ -963,7 +978,7 @@ viewShell model data =
                     , A.attribute "role" "listbox"
                     , A.attribute "aria-label" "Buffers"
                     ]
-                    (List.indexedMap (viewBufferItem model) Buffers.all)
+                    (List.indexedMap (viewBufferItem model) (bufferList model))
                 ]
             , section [ class "buffer-pane glass-strong" ]
                 [ div [ class "buffer-tabbar" ]

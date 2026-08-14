@@ -4,6 +4,7 @@ module Resume exposing
     , JobView
     , OssView
     , Profile
+    , ProjectLink
     , SkillsView
     , View
     , ViewProfile
@@ -80,6 +81,7 @@ type alias Project =
     { name : String
     , description : String
     , url : String
+    , github : String
     , keywords : List String
     , entity : String
     }
@@ -149,6 +151,14 @@ type alias SkillsView =
     }
 
 
+type alias ProjectLink =
+    { name : String
+    , description : String
+    , url : String
+    , github : String
+    }
+
+
 type alias View =
     { profile : ViewProfile
     , summary : String
@@ -158,6 +168,7 @@ type alias View =
     , openSource : List OssView
     , skills : SkillsView
     , education : List EduView
+    , crossrSkills : Maybe ProjectLink
     }
 
 
@@ -247,10 +258,11 @@ skillDecoder =
 
 projectDecoder : Decoder Project
 projectDecoder =
-    D.map5 Project
+    D.map6 Project
         (D.field "name" str)
         (D.oneOf [ D.field "description" str, D.succeed "" ])
         (D.oneOf [ D.field "url" str, D.succeed "" ])
+        (D.oneOf [ D.field "github" str, D.succeed "" ])
         (D.oneOf [ D.field "keywords" (D.list str), D.succeed [] ])
         (D.oneOf [ D.field "entity" str, D.succeed "" ])
 
@@ -450,6 +462,10 @@ mapResume doc =
                     }
                 )
                 doc.education
+
+        crossrSkills =
+            projectByName "crossr-skills" doc.projects
+                |> Maybe.map toProjectLink
     in
     { profile = profile
     , summary = basics.summary
@@ -459,6 +475,27 @@ mapResume doc =
     , openSource = openSource
     , skills = skillsView
     , education = eduView
+    , crossrSkills = crossrSkills
+    }
+
+
+projectByName : String -> List Project -> Maybe Project
+projectByName name projects =
+    let
+        needle =
+            String.toLower name
+    in
+    projects
+        |> List.filter (\p -> String.toLower p.name == needle)
+        |> List.head
+
+
+toProjectLink : Project -> ProjectLink
+toProjectLink p =
+    { name = p.name
+    , description = p.description
+    , url = p.url
+    , github = p.github
     }
 
 
