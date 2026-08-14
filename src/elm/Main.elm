@@ -323,6 +323,19 @@ runCommand raw model =
             "q" ->
                 openBuffer "README.md" False model
 
+            "mail" ->
+                let
+                    email =
+                        model.resume
+                            |> Maybe.map (\r -> String.trim r.profile.email)
+                            |> Maybe.withDefault ""
+                in
+                if String.isEmpty email then
+                    ( setMsg "error: no email in resume" "error" model, Cmd.none )
+
+                else
+                    ( model, Ports.openUrl ("mailto:" ++ email ++ "?subject=scull7.com") )
+
             "quit" ->
                 openBuffer "README.md" False model
 
@@ -402,6 +415,7 @@ paletteItems model =
                 [ ( ":help", "Show help", "cmd:help" )
                 , ( ":ls", "List buffers", "cmd:ls" )
                 , ( ":q", "Go home", "cmd:q" )
+                , ( ":mail", "Open email", "cmd:mail" )
                 , ( ":terminal", "Live terminal", "cmd:terminal" )
                 , ( ":relay", "Relay viz", "cmd:relay" )
                 ]

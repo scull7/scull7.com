@@ -304,7 +304,7 @@ viewHelp =
         rows =
             [ ( ":  /  Esc", "Command palette · search · cancel" )
             , ( "Ctrl-[  Ctrl-c", "Esc synonyms (palette / cancel)" )
-            , ( ":help  :ls  :q", "Help · list buffers · home" )
+            , ( ":help  :ls  :q  :mail", "Help · list buffers · home · email" )
             , ( ":e / :open {name}", "Open buffer by name" )
             , ( "j k  ↑ ↓", "Move buffer focus" )
             , ( "Enter  l", "Open focused buffer" )

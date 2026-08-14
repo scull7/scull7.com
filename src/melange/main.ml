@@ -1,4 +1,4 @@
-(* Melange entry — boots Elm and wires ports (focus, blur, scroll, key preventDefault). *)
+(* Melange entry — boots Elm and wires ports (focus, blur, openUrl, scroll, key preventDefault). *)
 
 type scroll_msg = {
   action : string;
@@ -10,6 +10,7 @@ type 'a port = { subscribe : ('a -> unit) -> unit }
 type ports = {
   focus : string port;
   blur : string port;
+  openUrl : string port;
   scrollBuffer : scroll_msg port;
 }
 
@@ -90,6 +91,9 @@ external set_timeout : (unit -> unit) -> int -> unit = "setTimeout"
 [@@mel.scope "globalThis"]
 
 external console_error : string -> unit = "error" [@@mel.scope "console"]
+
+external location_assign : string -> unit = "assign"
+[@@mel.scope ("window", "location")]
 
 let rec attempt_focus id n =
   match Js.Nullable.toOption (get_element_by_id document id) with
@@ -181,6 +185,7 @@ let boot () =
       let app = elm.main.init { node; flags = { isMobile = is_mobile } } in
       app.ports.focus.subscribe (fun id -> defer_focus id);
       app.ports.blur.subscribe (fun id -> do_blur id);
+      app.ports.openUrl.subscribe location_assign;
       app.ports.scrollBuffer.subscribe (fun msg -> do_scroll msg);
       add_event_listener document "keydown"
         (fun ev -> if should_prevent ev then prevent_default ev)
