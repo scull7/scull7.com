@@ -101,6 +101,7 @@ type alias Doc =
     , projects : List Project
     , interests : List Interest
     , philosophy : String
+    , lastModified : String
     }
 
 
@@ -171,6 +172,7 @@ type alias View =
     , education : List EduView
     , crossrSkills : Maybe ProjectLink
     , philosophy : String
+    , lastUpdated : Maybe String
     }
 
 
@@ -278,7 +280,7 @@ interestDecoder =
 
 decoder : Decoder Doc
 decoder =
-    D.map7 Doc
+    D.map8 Doc
         (D.field "basics" basicsDecoder)
         (D.oneOf [ D.field "work" (D.list workDecoder), D.succeed [] ])
         (D.oneOf [ D.field "education" (D.list eduDecoder), D.succeed [] ])
@@ -286,6 +288,7 @@ decoder =
         (D.oneOf [ D.field "projects" (D.list projectDecoder), D.succeed [] ])
         (D.oneOf [ D.field "interests" (D.list interestDecoder), D.succeed [] ])
         (D.oneOf [ D.field "philosophy" str, D.succeed "" ])
+        (D.oneOf [ D.at [ "meta", "lastModified" ] str, D.succeed "" ])
 
 
 skillKeywords : List Skill -> String -> List String
@@ -480,6 +483,7 @@ mapResume doc =
     , education = eduView
     , crossrSkills = crossrSkills
     , philosophy = doc.philosophy
+    , lastUpdated = isoDatePrefix doc.lastModified
     }
 
 
@@ -501,6 +505,29 @@ toProjectLink p =
     , url = p.url
     , github = p.github
     }
+
+
+isoDatePrefix : String -> Maybe String
+isoDatePrefix raw =
+    let
+        prefix =
+            String.left 10 raw
+    in
+    if isYyyyMmDd prefix then
+        Just prefix
+
+    else
+        Nothing
+
+
+isYyyyMmDd : String -> Bool
+isYyyyMmDd s =
+    case String.toList s of
+        [ y1, y2, y3, y4, '-', m1, m2, '-', d1, d2 ] ->
+            List.all Char.isDigit [ y1, y2, y3, y4, m1, m2, d1, d2 ]
+
+        _ ->
+            False
 
 
 unique : List String -> List String

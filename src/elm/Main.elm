@@ -1015,10 +1015,12 @@ viewShell model data =
                 , span [ class "file" ] [ text buf.label ]
                 , span [ class "spacer" ] []
                 , span [ class "meta" ]
-                    [ span [] [ text data.profile.location ]
-                    , span [] [ text (String.fromInt (model.focusIdx + 1) ++ ":1") ]
-                    , span [] [ text "utf-8" ]
-                    ]
+                    ([ span [] [ text data.profile.location ]
+                     , span [] [ text (String.fromInt (model.focusIdx + 1) ++ ":1") ]
+                     ]
+                        ++ updatedMeta data.lastUpdated
+                        ++ [ span [] [ text "utf-8" ] ]
+                    )
                 ]
             , div [ class "cmdline" ]
                 [ span
@@ -1084,6 +1086,16 @@ viewShell model data =
                 ]
             ]
         ]
+
+
+updatedMeta : Maybe String -> List (Html msg)
+updatedMeta lastUpdated =
+    case lastUpdated of
+        Just date ->
+            [ span [] [ text ("updated " ++ date) ] ]
+
+        Nothing ->
+            []
 
 
 viewBufferItem : Model -> Int -> Buffer -> Html Msg
