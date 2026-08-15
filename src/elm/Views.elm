@@ -44,6 +44,9 @@ bufferBody data buf termLines onTermSubmit onTermFocus onTermBlur =
         Skills ->
             viewSkills data
 
+        Philosophy ->
+            viewPhilosophy data
+
         OpenSource ->
             viewOpenSource data
 
@@ -126,6 +129,15 @@ viewHighlights data =
                 data.education
             )
         ]
+
+
+viewPhilosophy : View -> Html msg
+viewPhilosophy data =
+    if String.isEmpty data.philosophy then
+        text ""
+
+    else
+        div [ style "white-space" "pre-wrap" ] [ text data.philosophy ]
 
 
 viewSkills : View -> Html msg

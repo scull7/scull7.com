@@ -100,6 +100,7 @@ type alias Doc =
     , skills : List Skill
     , projects : List Project
     , interests : List Interest
+    , philosophy : String
     }
 
 
@@ -169,6 +170,7 @@ type alias View =
     , skills : SkillsView
     , education : List EduView
     , crossrSkills : Maybe ProjectLink
+    , philosophy : String
     }
 
 
@@ -276,13 +278,14 @@ interestDecoder =
 
 decoder : Decoder Doc
 decoder =
-    D.map6 Doc
+    D.map7 Doc
         (D.field "basics" basicsDecoder)
         (D.oneOf [ D.field "work" (D.list workDecoder), D.succeed [] ])
         (D.oneOf [ D.field "education" (D.list eduDecoder), D.succeed [] ])
         (D.oneOf [ D.field "skills" (D.list skillDecoder), D.succeed [] ])
         (D.oneOf [ D.field "projects" (D.list projectDecoder), D.succeed [] ])
         (D.oneOf [ D.field "interests" (D.list interestDecoder), D.succeed [] ])
+        (D.oneOf [ D.field "philosophy" str, D.succeed "" ])
 
 
 skillKeywords : List Skill -> String -> List String
@@ -476,6 +479,7 @@ mapResume doc =
     , skills = skillsView
     , education = eduView
     , crossrSkills = crossrSkills
+    , philosophy = doc.philosophy
     }
 
 

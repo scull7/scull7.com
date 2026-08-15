@@ -17,6 +17,7 @@ type BufferKind
     | Experience
     | Highlights
     | Skills
+    | Philosophy
     | OpenSource
     | CrossrSkills
     | Code
@@ -51,6 +52,17 @@ core =
     ]
 
 
+philosophyBuffer : Buffer
+philosophyBuffer =
+    { id = "philosophy.md"
+    , icon = "¶"
+    , kind = Philosophy
+    , label = "philosophy.md"
+    , badge = "note"
+    , sample = ""
+    }
+
+
 crossrSkillsBuffer : Buffer
 crossrSkillsBuffer =
     { id = "crossr-skills.md"
@@ -64,12 +76,20 @@ crossrSkillsBuffer =
 
 catalog : View -> List Buffer
 catalog data =
+    let
+        withPhilosophy =
+            if String.isEmpty (String.trim data.philosophy) then
+                core
+
+            else
+                insertAfter "skills.md" philosophyBuffer core
+    in
     case data.crossrSkills of
         Nothing ->
-            core
+            withPhilosophy
 
         Just _ ->
-            insertAfter "opensource.md" crossrSkillsBuffer core
+            insertAfter "opensource.md" crossrSkillsBuffer withPhilosophy
 
 
 insertAfter : String -> Buffer -> List Buffer -> List Buffer
