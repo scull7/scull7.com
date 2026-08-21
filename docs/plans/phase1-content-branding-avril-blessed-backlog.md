@@ -1,13 +1,13 @@
 # Blessed Backlog Summary — Phase 1 Content + Branding/SEO
 
-**Date:** 2026-08-13  
-**Conductor:** AVRIL (Architect → PO → QA → CTO)  
-**Status:** Planning stop. Pinto is source of truth. Hand off to AXEL only when the human authorizes execution.  
+**Date:** 2026-08-13 (bless); 2026-08-21 (ship)  
+**Conductor:** AVRIL (Architect → PO → QA → CTO) → AXEL  
+**Status:** In-repo slice **shipped** in [PR #5](https://github.com/scull7/scull7.com/pull/5) (`e8a6030`). Pinto is source of truth.  
 **Intent:** `docs/plans/phase1-content-branding-avril-intent.md`
 
 ## Intent
 
-Make scull7.com complete and frictionless for sharing without diluting the vim/terminal product: authorized career facts, crossr-skills + ferro-wg, philosophy buffer, `:mail`, last-updated, scraper card, URL hygiene, and human identity (GitHub/X). `nathansculli.com` stays retired.
+Make scull7.com complete and frictionless for sharing without diluting the vim/terminal product: authorized career facts, crossr-skills + ferro-wg, `:mail`, last-updated, scraper card, URL hygiene, and human identity (GitHub/X). `nathansculli.com` stays retired. Philosophy is **internal** (not a public buffer or JSON field).
 
 ## Board (source of truth)
 
@@ -16,8 +16,23 @@ pinto list
 pinto show T-<n>
 ```
 
-Project key `T`. Column: all `todo`. DoD in `.pinto/dod.md`.  
+Project key `T`. DoD in `.pinto/dod.md`.  
 This file is a summary + blessing log. **Do not fork a second tracker.**
+
+## Execution outcome (2026-08-21)
+
+| ID | Board | Outcome |
+|---|---|---|
+| T-1 | done | Resume facts + ROADMAP pointer. Philosophy JSON later removed as internal. |
+| T-2 | done | `crossr-skills.md` buffer from JSON. |
+| T-3 | done | `:mail` → public mailto. |
+| T-4 | done | Person JSON-LD + `og.png`. |
+| T-5 | done | URL audit no-op (already clean). |
+| T-9 | done → unpublished | Buffer shipped then removed (`675b2fb`); not on live catalog or `/resume.json`. |
+| T-10 | done | Statusline `updated YYYY-MM-DD`. |
+| T-6 | todo | Human: GitHub profile website. |
+| T-7 | todo | Human: X website. |
+| T-8 | todo | Human: leave `nathansculli.com` NXDOMAIN. |
 
 ## Blessed PBIs (ordered)
 
@@ -79,4 +94,4 @@ Cycle 6 — CTO: BLESS T-1 … T-10. No REJECT.
 
 ## Stop
 
-Planning complete. **Do not implement from this session.** Authorize **AXEL** to execute. Pinto remains the only backlog.
+In-repo execution complete (PR #5). Remaining work is human T-6, T-7, T-8. Pinto remains the only backlog.

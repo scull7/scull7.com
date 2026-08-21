@@ -5,7 +5,7 @@
 **Live:** https://scull7.com  
 **Canonical data:** `public/resume.json` (JSON Resume)
 
-**Current slice:** Content + branding is governed by [`docs/plans/phase1-content-branding-avril-intent.md`](plans/phase1-content-branding-avril-intent.md) and [`docs/plans/phase1-content-branding-avril-blessed-backlog.md`](plans/phase1-content-branding-avril-blessed-backlog.md); those files supersede older roadmap phases for this slice.
+**Current slice (shipped in-repo):** Content + branding/SEO landed in [PR #5](https://github.com/scull7/scull7.com/pull/5) (`e8a6030`, 2026-08-21). Plan files: [`docs/plans/phase1-content-branding-avril-intent.md`](plans/phase1-content-branding-avril-intent.md), [`docs/plans/phase1-content-branding-avril-blessed-backlog.md`](plans/phase1-content-branding-avril-blessed-backlog.md). Pinto: T-1–T-5, T-10 `done`; T-9 executed then **unpublished** (philosophy is internal — no public buffer, no `/resume.json` field). Remaining: human T-6 / T-7 / T-8.
 
 ---
 
@@ -52,8 +52,12 @@ A personal resume / portfolio presented as a **vim-inspired IDE shell**:
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Resume home / hero / links | Done | From JSON Resume basics |
-| Experience, highlights, skills, OSS, education | Done | Mapped in `Resume.elm` |
+| Resume home / hero / links | Done | From JSON Resume basics (2026 facts, PR #5) |
+| Experience, highlights, skills, OSS, education | Done | Mapped in `Resume.elm`; OSS leads with crossr-skills + ferro-wg |
+| `crossr-skills.md` buffer | Done | JSON project; missing project hides the row |
+| `:mail` | Done | `mailto:` + subject `scull7.com` |
+| Last-updated statusline | Done | `updated YYYY-MM-DD` from `meta.lastModified` |
+| Philosophy buffer / JSON field | **Unpublished** | Internal; removed from catalog and `/resume.json` |
 | Code sample buffers + syntax tint | Done | Lightweight tokenizer, not full language grammar |
 | Relay viz demo | Done | Decorative + aria-label |
 | Live terminal mini-shell | Done | Autofocus on open (post keyboard fix) |
@@ -63,9 +67,9 @@ A personal resume / portfolio presented as a **vim-inspired IDE shell**:
 | a11y landmarks (listbox, dialog, live region) | Partial | Present; no axe CI |
 | Elm unit tests (`elm-test`) | **Missing** | Only Playwright e2e |
 | Deep-link URL → buffer | **Missing** | Always boots `README.md` |
-| SEO / SSR / noscript content | **Weak** | SPA shell; crawlers see little resume text |
+| SEO / SSR / noscript content | Partial | Person JSON-LD + absolute `og.png` (PR #5); still SPA, no noscript SSR |
 | Printable / PDF CV | **Missing** | |
-| Contact form | **Missing** | mailto only |
+| Contact form | **Missing** | `:mail` + hero mailto only |
 | Blog / writing | **Missing** | |
 | Theme toggle (light) | **Missing** | dark-only |
 | i18n | **Missing** | EN only |
