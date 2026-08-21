@@ -5,7 +5,7 @@
 **Live:** https://scull7.com  
 **Canonical data:** `public/resume.json` (JSON Resume)
 
-**Current slice (shipped in-repo):** Content + branding/SEO landed in [PR #5](https://github.com/scull7/scull7.com/pull/5) (`e8a6030`, 2026-08-21). Plan files: [`docs/plans/phase1-content-branding-avril-intent.md`](plans/phase1-content-branding-avril-intent.md), [`docs/plans/phase1-content-branding-avril-blessed-backlog.md`](plans/phase1-content-branding-avril-blessed-backlog.md). Pinto: T-1–T-5, T-10 `done`; T-9 executed then **unpublished** (philosophy is internal — no public buffer, no `/resume.json` field). Remaining: human T-6 / T-7 / T-8.
+**Current slice (shipped in-repo):** Content + branding/SEO landed in [PR #5](https://github.com/scull7/scull7.com/pull/5) (`e8a6030`, 2026-08-21). Plan files: [`docs/plans/phase1-content-branding-avril-intent.md`](plans/phase1-content-branding-avril-intent.md), [`docs/plans/phase1-content-branding-avril-blessed-backlog.md`](plans/phase1-content-branding-avril-blessed-backlog.md). Pinto: T-1–T-5, T-10 `done`; **T-9 cancelled** (philosophy internal). Remaining: human T-6 / T-7 / T-8.
 
 ---
 
