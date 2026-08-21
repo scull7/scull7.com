@@ -30,9 +30,9 @@ This file is a summary + blessing log. **Do not fork a second tracker.**
 | T-5 | done | URL audit no-op (already clean). |
 | T-9 | **cancelled** (archived) | Buffer shipped then unpublished (`675b2fb`); human cancelled 2026-08-21. Not on live catalog or `/resume.json`. |
 | T-10 | done | Statusline `updated YYYY-MM-DD`. |
-| T-6 | todo | Human: GitHub profile website. |
-| T-7 | todo | Human: X website. |
-| T-8 | todo | Human: leave `nathansculli.com` NXDOMAIN. |
+| T-6 | done | GitHub profile website → `scull7.com`. |
+| T-7 | done | X @Scull7 website → `scull7.com`. |
+| T-8 | in-progress | Human recovering registrar access; keep NXDOMAIN; no redirect. |
 
 ## Blessed PBIs (ordered)
 
