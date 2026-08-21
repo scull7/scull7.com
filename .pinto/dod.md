@@ -1,0 +1,6 @@
+- [ ] Acceptance criteria are falsifiable checkboxes
+- [ ] JSON Resume remains source of truth for career facts
+- [ ] Terminal aesthetic preserved (vim command/buffer/statusline, no marketing chrome)
+- [ ] No unpublished or unauthorized public claims
+- [ ] Human PBIs include step-by-step execution instructions
+- [ ] PR reviewable in one short pass
