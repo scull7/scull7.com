@@ -1,12 +1,18 @@
 # AVRIL Intent — Phase 1 Content + Branding/SEO
 
-**Status:** Human-authorized intent. Not a backlog. Not AXEL authorization.  
-**Date:** 2026-08-13  
+**Status:** Shipped in-repo ([PR #5](https://github.com/scull7/scull7.com/pull/5), merged 2026-08-21). Human T-6/T-7/T-8 still open.  
+**Date:** 2026-08-13 (intent); 2026-08-21 (ship)  
 **Workspace:** `/Users/nathansculli/src/scull7.com`  
 **Live:** https://scull7.com  
 **SoT:** `public/resume.json` (JSON Resume)
 
-AVRIL reads this file and stops at a triple-blessed backlog. Do not implement.
+Historical AVRIL lock. Do not treat as a live execution backlog — Pinto is the board.
+
+### Ship notes (do not rewrite the lock below)
+
+- In-repo PBIs T-1–T-5, T-9, T-10 executed via AXEL; merged in PR #5.
+- **Philosophy (decision #8) superseded 2026-08-21:** human — treat as internal documentation. No `philosophy.md` buffer; no `philosophy` field on public `resume.json` (`675b2fb`).
+- Remaining: T-6 GitHub website, T-7 X website, T-8 leave `nathansculli.com` NXDOMAIN.
 
 ---
 
