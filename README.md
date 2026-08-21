@@ -44,16 +44,15 @@ npm run preview
 
 ## Crawlable HTML
 
-`dune build @site` emits a Node CLI from Melange. After `vite build`, that CLI
-reads `public/resume.json` and writes static HTML into
-`<noscript id="crawlable-resume">` in `dist/index.html`. Source `index.html`
-keeps the delimiter empty. Career facts come from JSON — do not hand-edit them
-in HTML.
+`dune build @site` emits a Node CLI from Melange. Vite `closeBundle` runs that
+CLI so `npx vite build` fills `<noscript id="crawlable-resume">` in
+`dist/index.html` from `public/resume.json`. Source `index.html` keeps the
+delimiter empty. Career facts come from JSON — do not hand-edit them in HTML.
 
 ```bash
 npm run inject:resume        # print the fragment
-npm run inject:resume:dist   # patch dist/index.html
-npm run build                # melange + vite + inject
+npm run inject:resume:dist   # patch dist/index.html (same CLI Vite uses)
+npm run build                # melange + vite (inject in closeBundle)
 ```
 
 ## Structure

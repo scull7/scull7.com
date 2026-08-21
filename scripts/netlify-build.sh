@@ -58,8 +58,5 @@ opam exec -- dune build @site
 echo "→ vite build"
 npx vite build
 
-echo "→ inject crawlable resume (Melange)"
-node _build/default/src/melange/crawlable/src/melange/crawlable_cli.cjs inject dist/index.html public/resume.json
-
 echo "→ build ok"
 ls -la dist

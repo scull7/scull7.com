@@ -9,7 +9,7 @@
     "melange:watch": "opam exec -- dune build @site --watch",
     "elm:make": "elm make src/elm/Main.elm --output=/dev/null",
     "dev": "npm run melange && concurrently -k -n mel,vite -c magenta,cyan \"npm run melange:watch\" \"vite\"",
-    "build": "npm run melange && vite build && npm run inject:resume:dist",
+    "build": "npm run melange && vite build",
     "inject:resume": "node _build/default/src/melange/crawlable/src/melange/crawlable_cli.cjs",
     "inject:resume:dist": "node _build/default/src/melange/crawlable/src/melange/crawlable_cli.cjs inject dist/index.html public/resume.json",
     "preview": "vite preview",
