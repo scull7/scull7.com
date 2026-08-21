@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Allow: /resume.json
+
+Sitemap: https://scull7.com/sitemap.xml
