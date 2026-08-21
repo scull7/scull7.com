@@ -28,7 +28,7 @@ This file is a summary + blessing log. **Do not fork a second tracker.**
 | T-3 | done | `:mail` → public mailto. |
 | T-4 | done | Person JSON-LD + `og.png`. |
 | T-5 | done | URL audit no-op (already clean). |
-| T-9 | done → unpublished | Buffer shipped then removed (`675b2fb`); not on live catalog or `/resume.json`. |
+| T-9 | **cancelled** (archived) | Buffer shipped then unpublished (`675b2fb`); human cancelled 2026-08-21. Not on live catalog or `/resume.json`. |
 | T-10 | done | Statusline `updated YYYY-MM-DD`. |
 | T-6 | todo | Human: GitHub profile website. |
 | T-7 | todo | Human: X website. |
