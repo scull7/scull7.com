@@ -3,7 +3,7 @@
   "meta": {
     "canonical": "https://scull7.com/resume.json",
     "version": "1.0.0",
-    "lastModified": "2026-08-14T15:41:12Z"
+    "lastModified": "2026-08-21T01:22:31Z"
   },
   "basics": {
     "name": "Nathan Sculli",
@@ -468,6 +468,5 @@
       "language": "English",
       "fluency": "Native speaker"
     }
-  ],
-  "philosophy": "Industrial MES → financial HSM → GPU-cloud control planes. Same habit: isolate effects, keep the core pure, measure the line.\n\nAgents get the same treatment: AVRIL plans, AXEL executes, nothing ships unblessed. crossr-skills is that discipline made public."
+  ]
 }
