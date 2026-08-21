@@ -4,6 +4,7 @@ module Resume exposing
     , JobView
     , OssView
     , Profile
+    , ProjectLink
     , SkillsView
     , View
     , ViewProfile
@@ -80,6 +81,7 @@ type alias Project =
     { name : String
     , description : String
     , url : String
+    , github : String
     , keywords : List String
     , entity : String
     }
@@ -98,6 +100,7 @@ type alias Doc =
     , skills : List Skill
     , projects : List Project
     , interests : List Interest
+    , lastModified : String
     }
 
 
@@ -149,6 +152,14 @@ type alias SkillsView =
     }
 
 
+type alias ProjectLink =
+    { name : String
+    , description : String
+    , url : String
+    , github : String
+    }
+
+
 type alias View =
     { profile : ViewProfile
     , summary : String
@@ -158,6 +169,8 @@ type alias View =
     , openSource : List OssView
     , skills : SkillsView
     , education : List EduView
+    , crossrSkills : Maybe ProjectLink
+    , lastUpdated : Maybe String
     }
 
 
@@ -247,10 +260,11 @@ skillDecoder =
 
 projectDecoder : Decoder Project
 projectDecoder =
-    D.map5 Project
+    D.map6 Project
         (D.field "name" str)
         (D.oneOf [ D.field "description" str, D.succeed "" ])
         (D.oneOf [ D.field "url" str, D.succeed "" ])
+        (D.oneOf [ D.field "github" str, D.succeed "" ])
         (D.oneOf [ D.field "keywords" (D.list str), D.succeed [] ])
         (D.oneOf [ D.field "entity" str, D.succeed "" ])
 
@@ -264,13 +278,14 @@ interestDecoder =
 
 decoder : Decoder Doc
 decoder =
-    D.map6 Doc
+    D.map7 Doc
         (D.field "basics" basicsDecoder)
         (D.oneOf [ D.field "work" (D.list workDecoder), D.succeed [] ])
         (D.oneOf [ D.field "education" (D.list eduDecoder), D.succeed [] ])
         (D.oneOf [ D.field "skills" (D.list skillDecoder), D.succeed [] ])
         (D.oneOf [ D.field "projects" (D.list projectDecoder), D.succeed [] ])
         (D.oneOf [ D.field "interests" (D.list interestDecoder), D.succeed [] ])
+        (D.oneOf [ D.at [ "meta", "lastModified" ] str, D.succeed "" ])
 
 
 skillKeywords : List Skill -> String -> List String
@@ -450,6 +465,10 @@ mapResume doc =
                     }
                 )
                 doc.education
+
+        crossrSkills =
+            projectByName "crossr-skills" doc.projects
+                |> Maybe.map toProjectLink
     in
     { profile = profile
     , summary = basics.summary
@@ -459,7 +478,52 @@ mapResume doc =
     , openSource = openSource
     , skills = skillsView
     , education = eduView
+    , crossrSkills = crossrSkills
+    , lastUpdated = isoDatePrefix doc.lastModified
     }
+
+
+projectByName : String -> List Project -> Maybe Project
+projectByName name projects =
+    let
+        needle =
+            String.toLower name
+    in
+    projects
+        |> List.filter (\p -> String.toLower p.name == needle)
+        |> List.head
+
+
+toProjectLink : Project -> ProjectLink
+toProjectLink p =
+    { name = p.name
+    , description = p.description
+    , url = p.url
+    , github = p.github
+    }
+
+
+isoDatePrefix : String -> Maybe String
+isoDatePrefix raw =
+    let
+        prefix =
+            String.left 10 raw
+    in
+    if isYyyyMmDd prefix then
+        Just prefix
+
+    else
+        Nothing
+
+
+isYyyyMmDd : String -> Bool
+isYyyyMmDd s =
+    case String.toList s of
+        [ y1, y2, y3, y4, '-', m1, m2, '-', d1, d2 ] ->
+            List.all Char.isDigit [ y1, y2, y3, y4, m1, m2, d1, d2 ]
+
+        _ ->
+            False
 
 
 unique : List String -> List String

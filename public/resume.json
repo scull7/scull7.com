@@ -3,7 +3,7 @@
   "meta": {
     "canonical": "https://scull7.com/resume.json",
     "version": "1.0.0",
-    "lastModified": "2026-07-12T00:00:00"
+    "lastModified": "2026-08-21T01:22:31Z"
   },
   "basics": {
     "name": "Nathan Sculli",
@@ -12,7 +12,7 @@
     "email": "nathan@vegasbuckeye.com",
     "phone": "",
     "url": "https://scull7.com",
-    "summary": "Director of Engineering at TensorWave, primary individual contributor on the Relay service that enabled delivery of the largest AMD-based GPU clouds in record time.\n\nOver twenty years building and leading across AI infrastructure, financial services, ML and data platforms, manufacturing, and SaaS.\nEqually effective scaling teams of more than one hundred engineers across a career and architecting deep systems in Rust, OCaml, ReasonML, Haskell, and JavaScript.\nFounder and CTO experience across three ventures.",
+    "summary": "Director of Engineering at TensorWave and primary IC on Relay, the control plane behind the largest AMD-based GPU clouds.\n\nTwenty years as a builder-leader across AI infrastructure, financial services, data platforms, manufacturing, and SaaS. I scale orgs (100+ engineers over a career) and still ship the hard systems — Rust, OCaml, ReasonML, Haskell, JavaScript.\n\nFounder/CTO of three ventures.",
     "location": {
       "address": "",
       "postalCode": "",
@@ -49,7 +49,8 @@
       "highlights": [
         "Primary IC on the Relay service, enabling delivery of the largest AMD-based GPU clouds in record time",
         "Lead the software development organization; architect and oversee company-wide software projects",
-        "Primary IC on the Event API"
+        "Primary IC on the Event API",
+        "TensorWave raised $350M Series B at $1.55B post-money and operates as an AMD-powered, AMD-exclusive AI cloud"
       ],
       "endDate": "",
       "description": ""
@@ -328,6 +329,34 @@
     }
   ],
   "projects": [
+    {
+      "name": "crossr-skills",
+      "description": "Agent skills + harness for long-running coding agents, forged in the Cross.",
+      "url": "https://scull7.github.io/crossr-skills/",
+      "github": "https://github.com/scull7/crossr-skills",
+      "keywords": [
+        "open-source"
+      ],
+      "type": "application",
+      "roles": [
+        "Author"
+      ],
+      "entity": ""
+    },
+    {
+      "name": "ferro-wg",
+      "description": "Rust WireGuard client with TUI and swappable backends (boringtun, neptun, gotatun).",
+      "url": "https://github.com/scull7/ferro-wg",
+      "keywords": [
+        "Rust",
+        "open-source"
+      ],
+      "type": "application",
+      "roles": [
+        "Author"
+      ],
+      "entity": ""
+    },
     {
       "name": "cents",
       "description": "Integer-cents library for financial ledgers — avoids floating-point money errors.",

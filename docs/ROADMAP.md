@@ -5,6 +5,8 @@
 **Live:** https://scull7.com  
 **Canonical data:** `public/resume.json` (JSON Resume)
 
+**Current slice:** Content + branding is governed by [`docs/plans/phase1-content-branding-avril-intent.md`](plans/phase1-content-branding-avril-intent.md) and [`docs/plans/phase1-content-branding-avril-blessed-backlog.md`](plans/phase1-content-branding-avril-blessed-backlog.md); those files supersede older roadmap phases for this slice.
+
 ---
 
 ## 1. What the site is
