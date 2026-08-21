@@ -41,6 +41,19 @@ npm run preview
 - UI and state: **Elm**  
 - Browser interop (focus, blur, scroll, key preventDefault): **Melange** (OCaml)  
 
+## Crawlable HTML
+
+`vite build` (via `npm run build` and `scripts/netlify-build.sh`) runs a Vite
+plugin in `scripts/crawlable-resume.mjs` that reads `public/resume.json` and
+writes static HTML into `<noscript id="crawlable-resume">`. Source `index.html`
+keeps that delimiter empty; `dist/index.html` is filled at build. Career facts
+come from JSON — do not hand-edit them in HTML. No extra npm packages.
+
+```bash
+npm run inject:resume   # print the fragment (Node stdlib)
+npm run build           # injects into dist/index.html
+```
+
 ## Structure
 
 ```
@@ -52,6 +65,9 @@ src/melange/
   main.ml            # boot Elm + port wiring (Melange)
   dune               # melange.emit → _build/.../main.js
 src/main.js          # Vite entry imports Melange output
+scripts/
+  crawlable-resume.mjs  # JSON Resume → <noscript id="crawlable-resume">
+  netlify-build.sh
 public/
   resume.json
   styles/{galaxy,vim}.css

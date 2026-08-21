@@ -10,6 +10,7 @@
     "elm:make": "elm make src/elm/Main.elm --output=/dev/null",
     "dev": "npm run melange && concurrently -k -n mel,vite -c magenta,cyan \"npm run melange:watch\" \"vite\"",
     "build": "npm run melange && vite build",
+    "inject:resume": "node scripts/crawlable-resume.mjs",
     "preview": "vite preview",
     "opam:init": "opam switch create . 5.2.0 -y --no-install && opam install . --deps-only -y && npm install",
     "opam:deps": "opam install . --deps-only -y",
