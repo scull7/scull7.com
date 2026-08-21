@@ -37,21 +37,23 @@ npm run build
 npm run preview
 ```
 
-**No TypeScript. No ReScript.**  
+**No TypeScript. No ReScript. No hand-written JS for resume inject.**  
 - UI and state: **Elm**  
 - Browser interop (focus, blur, scroll, key preventDefault): **Melange** (OCaml)  
+- Crawlable HTML: **Melange** CLI (`src/melange/crawlable*.ml`)  
 
 ## Crawlable HTML
 
-`vite build` (via `npm run build` and `scripts/netlify-build.sh`) runs a Vite
-plugin in `scripts/crawlable-resume.mjs` that reads `public/resume.json` and
-writes static HTML into `<noscript id="crawlable-resume">`. Source `index.html`
-keeps that delimiter empty; `dist/index.html` is filled at build. Career facts
-come from JSON — do not hand-edit them in HTML. No extra npm packages.
+`dune build @site` emits a Node CLI from Melange. After `vite build`, that CLI
+reads `public/resume.json` and writes static HTML into
+`<noscript id="crawlable-resume">` in `dist/index.html`. Source `index.html`
+keeps the delimiter empty. Career facts come from JSON — do not hand-edit them
+in HTML.
 
 ```bash
-npm run inject:resume   # print the fragment (Node stdlib)
-npm run build           # injects into dist/index.html
+npm run inject:resume        # print the fragment
+npm run inject:resume:dist   # patch dist/index.html
+npm run build                # melange + vite + inject
 ```
 
 ## Structure
@@ -63,10 +65,11 @@ src/elm/
   Format.elm / Buffers.elm / Fuzzy.elm / Highlight.elm / Views.elm / Ports.elm
 src/melange/
   main.ml            # boot Elm + port wiring (Melange)
-  dune               # melange.emit → _build/.../main.js
+  html.ml / resume_doc.ml / crawlable.ml / crawlable_cli.ml
+                     # JSON Resume → <noscript id="crawlable-resume">
+  dune               # melange.emit → _build/.../main.js + crawlable CLI
 src/main.js          # Vite entry imports Melange output
 scripts/
-  crawlable-resume.mjs  # JSON Resume → <noscript id="crawlable-resume">
   netlify-build.sh
 public/
   resume.json
