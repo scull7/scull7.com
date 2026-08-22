@@ -117,15 +117,33 @@ let origin_of request context (cfg : Interview_config.t) =
           | None -> cfg.site_url))
 
 external js_message : 'a -> string Js.undefined = "message" [@@mel.get]
+external js_payload : 'a -> string Js.undefined = "_1" [@@mel.get]
+external js_cause : 'a -> 'a Js.undefined = "cause" [@@mel.get]
+
+let useful = function
+  | Some s when String.trim s <> "" && s <> "Failure" && s <> "Error" ->
+      Some (String.trim s)
+  | _ -> None
+
+let rec peek_exn err depth =
+  if depth > 3 then None
+  else
+    match useful (Js.Undefined.toOption (js_payload err)) with
+    | Some s -> Some s
+    | None -> (
+        match useful (Js.Undefined.toOption (js_message err)) with
+        | Some s -> Some s
+        | None -> (
+            match Js.Undefined.toOption (js_cause err) with
+            | Some c -> peek_exn c (depth + 1)
+            | None -> None))
 
 let fail_message exn =
-  let ocaml = Printexc.to_string exn in
-  if ocaml <> "Failure" && not (String.starts_with ~prefix:"Failure" ocaml)
-  then ocaml
-  else
-    match Js.Undefined.toOption (js_message exn) with
-    | Some m when String.trim m <> "" -> m
-    | _ -> ocaml
+  match peek_exn exn 0 with
+  | Some s -> s
+  | None ->
+      let ocaml = Printexc.to_string exn in
+      if ocaml <> "Failure" then ocaml else "function failed"
 
 let fail_res exn =
   Interview_http.respond 500 "application/json; charset=utf-8"

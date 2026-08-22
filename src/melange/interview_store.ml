@@ -169,11 +169,29 @@ module Memory = struct
 end
 
 external js_message : 'a -> string Js.undefined = "message" [@@mel.get]
+external js_payload : 'a -> string Js.undefined = "_1" [@@mel.get]
+external js_cause : 'a -> 'a Js.undefined = "cause" [@@mel.get]
+
+let useful = function
+  | Some s when String.trim s <> "" && s <> "Failure" && s <> "Error" ->
+      Some (String.trim s)
+  | _ -> None
+
+let rec peek_exn err depth =
+  if depth > 3 then None
+  else
+    match useful (Js.Undefined.toOption (js_payload err)) with
+    | Some s -> Some s
+    | None -> (
+        match useful (Js.Undefined.toOption (js_message err)) with
+        | Some s -> Some s
+        | None -> (
+            match Js.Undefined.toOption (js_cause err) with
+            | Some c -> peek_exn c (depth + 1)
+            | None -> None))
 
 let js_err_message err =
-  match Js.Undefined.toOption (js_message err) with
-  | Some m when String.trim m <> "" -> m
-  | _ -> "fetch failed"
+  match peek_exn err 0 with Some s -> s | None -> "fetch failed"
 
 let strip_slash u =
   if String.ends_with ~suffix:"/" u && String.length u > 1 then
