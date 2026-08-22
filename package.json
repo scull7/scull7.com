@@ -21,7 +21,8 @@
     "test:e2e:only": "npm run melange && npm run e2e -- navigation",
     "test:t13": "npm run melange && npm run e2e -- t13",
     "test:agentic": "npm run melange && npm run e2e -- agentic",
-    "test": "npm run elm:make && npm run test:t13 && SKIP_BUILD=1 npm run test:agentic && SKIP_BUILD=1 npm run test:e2e"
+    "test:interview": "npm run melange && npm run e2e -- interview",
+    "test": "npm run elm:make && npm run test:t13 && SKIP_BUILD=1 npm run test:agentic && SKIP_BUILD=1 npm run test:e2e && SKIP_BUILD=1 npm run test:interview"
   },
   "dependencies": {
     "melange": "7.0.1",

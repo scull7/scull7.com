@@ -265,7 +265,7 @@ Later      Phase 5 as content ideas appear
 7. **CI workflow** `.github/workflows/ci.yml`.  
 8. **Archive** MoonBit improvement docs; leave one pointer in ROADMAP.  
 9. **T-14 (later):** public framework repo; private scull7.com site that depends on it.  
-10. **T-15 (later):** interview-me v1 — recruiter-agent sessions, cited Q&A, verified calendar hold.
+10. **T-15 (in progress):** interview-me v1 — recruiter-agent sessions, cited Q&A, verified calendar hold.
 
 ---
 

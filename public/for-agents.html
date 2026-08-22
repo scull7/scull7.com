@@ -26,8 +26,11 @@
       <h1>scull7.com developer resources</h1>
       <p>
         This page documents the machine-readable surface of Nathan Sculli’s
-        personal resume site. It does not describe a product API, an MCP
-        server, OAuth, or webhooks — those are not operated here.
+        personal resume site and the recruiter-agent product
+        <strong>interview-me</strong>. The static resume (HTML, Markdown,
+        <code>/resume.json</code>) is not a generic SaaS console.
+        Interview-me is the OpenAPI / MCP / webhook product for recruiter
+        agents.
       </p>
       <h2>Start here</h2>
       <ul>
@@ -55,11 +58,33 @@
         <a href="/privacy">/privacy</a> are static HTML (and Markdown) with
         the same name, email, and Las Vegas, NV identity as the homepage.
       </p>
+      <h2>Interview-me (recruiter agents)</h2>
+      <p>
+        Use interview-me to interview Nathan against published facts and,
+        after work-email verify, request a tentative calendar hold.
+      </p>
+      <ul>
+        <li><a href="/openapi.json">/openapi.json</a> — HTTP contract</li>
+        <li>
+          MCP at <code>/mcp</code> — tools:
+          <code>start_interview</code>, <code>ask_nathan</code>,
+          <code>request_verification</code>, <code>create_hold</code>,
+          <code>get_resume</code>
+        </li>
+        <li>
+          Optional <code>callback_url</code> events:
+          <code>interview.completed</code>, <code>booking.requested</code>
+        </li>
+      </ul>
+      <p>
+        Company OAuth, practice mode, and live audio/video are not offered.
+        Verify is a human magic-link click; the agent never needs inbox access.
+      </p>
       <h2>What is not here</h2>
       <p>
-        There is no <code>/api</code>, no OpenAPI document, no MCP endpoint,
-        and no webhook receiver. If a tool asks for those, it has the wrong
-        host. Use <a href="/contact">contact</a> for humans.
+        The static resume site does not provision partner API keys or OAuth
+        apps. If you need the recruiter-agent product, use OpenAPI or MCP
+        above. For humans, use <a href="/contact">contact</a>.
       </p>
       <footer class="static-footer">
         <p class="static-nap">

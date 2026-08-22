@@ -1,7 +1,7 @@
 # Interview-me v1
 
 **Date:** 2026-08-22  
-**Status:** Planned — do not implement the product in this change  
+**Status:** Implementing — Pinto T-15  
 **Tracker:** Pinto [T-15](../.pinto/tasks/T-15.md)  
 **Decisions:** Nathan, 2026-08-22 — locked (including hold length, calendar, storage, blocklist, hold cap, required question set); do not reopen
 
@@ -158,8 +158,32 @@ None remaining from the 2026-08-22 list. Hold length, calendar, storage, the fre
 
 ## In this repo (now)
 
-This note is the durable v1 spec. Do **not** implement interview-me in this change.
+This note is the durable v1 spec. Implementation is T-15 (Melange Netlify function, Turso, cited Q&A, magic-link verify, tentative GCal hold). Locked decisions stay locked.
 
-## Later (T-15)
+## Environment
 
-Implement interview-me v1 against this spec. Keep the locked decisions.
+Do not commit secrets. Config fails closed when a required secret is missing (HTTP 503 `missing_env` + the variable name).
+
+| Variable | Role | Default / notes |
+|----------|------|-----------------|
+| `TURSO_DATABASE_URL` | libSQL / Turso database | Required for sessions, tokens, holds. `libsql://` is rewritten to HTTPS. May be unset on the Netlify site today. |
+| `TURSO_AUTH_TOKEN` | Turso auth | Required with the URL. Already on Netlify site `cv-scull7` for production + deploy-preview. |
+| `INTERVIEW_MAGIC_LINK_SECRET` | HMAC for magic-link / book / ban tokens | Required before verify or hold. |
+| `INTERVIEW_HOLD_CAP` | Active tentative holds per work domain | `3` |
+| `INTERVIEW_REQUIRED_QUESTIONS` | Required set (CSV ids or JSON array) | The five locked items |
+| `INTERVIEW_FREE_EMAIL_BLOCKLIST` | Comma list | `gmail,yahoo,hotmail,outlook.com,icloud` |
+| `INTERVIEW_EMAIL_ALLOWLIST` | Comma list that bypasses the blocklist | empty |
+| `INTERVIEW_CALENDAR_ID` | Google Calendar id | `scull7.com` |
+| `INTERVIEW_HOLD_DEFAULT_SECONDS` | Default hold length | `3600` (1 hour) |
+| `INTERVIEW_MAIL_FROM` / `INTERVIEW_MAIL_TO` | Magic-link From; hold notification To | `nathan@vegasbuckeye.com` |
+| `RESEND_API_KEY` (or `INTERVIEW_RESEND_API_KEY`) | Send mail | Required to actually send. This repo had no mail path; Resend HTTP is the smallest real sender. |
+| `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` / `GOOGLE_OAUTH_REFRESH_TOKEN` | Calendar (and optional Gmail later) | Preferred Calendar connector. |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` or `GOOGLE_CLIENT_EMAIL` + `GOOGLE_PRIVATE_KEY` | Alternate Calendar auth | Used if OAuth refresh is unset. |
+| `INTERVIEW_SITE_URL` | Public origin for magic/ban links | `https://scull7.com` (deploy uses the request/site URL when present) |
+| `INTERVIEW_STORE=memory` | Test-only in-process store | Never the production default. Production is Turso. |
+
+`/openapi.json` and MCP `initialize` / `tools/list` work without Turso. Session, verify, and hold operations do not.
+
+## Later
+
+Keep locked decisions. Framework extract remains T-14.

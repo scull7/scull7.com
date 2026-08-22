@@ -8,5 +8,7 @@ Allow: /contact
 Allow: /privacy
 Allow: /for-agents
 Allow: /sitemap.xml
+Allow: /openapi.json
+Allow: /mcp
 
 Sitemap: https://scull7.com/sitemap.xml

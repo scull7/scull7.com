@@ -12,7 +12,7 @@ Nathan lives and works in Las Vegas, Nevada, United States. That city and region
 
 ## What not to expect
 
-scull7.com does not provide a product support inbox, an OAuth callback, a webhook receiver, or an MCP endpoint. Mail about those topics will not produce an API key or a partner integration. For the resume itself, prefer [/resume.json](https://scull7.com/resume.json) or the [homepage](https://scull7.com/).
+scull7.com does not provide a product support inbox or a company OAuth callback. Recruiter agents that need to interview Nathan should use interview-me ([/openapi.json](https://scull7.com/openapi.json), [/mcp](https://scull7.com/mcp)), not this inbox. Mail here will not produce an API key. For the resume itself, prefer [/resume.json](https://scull7.com/resume.json) or the [homepage](https://scull7.com/).
 
 Related: [about](https://scull7.com/about), [privacy](https://scull7.com/privacy), [sitemap](https://scull7.com/sitemap.xml), [llms.txt](https://scull7.com/llms.txt).
 

@@ -52,10 +52,26 @@ let write_negotiate_wrapper () =
   in
   Node.Fs.writeFileAsUtf8Sync (Node.Path.join2 edge_dest "negotiate.js") body
 
+let fn_src =
+  Node.Path.join [| cwd; "_build/default/src/melange/functions/src/melange" |]
+
+let fn_dest = Node.Path.join [| cwd; "netlify/functions" |]
+let fn_gen = Node.Path.join2 fn_dest "_melange"
+
+let write_interview_wrapper () =
+  let body =
+    "export { config, default } from \"./_melange/interview_fn.js\";\n"
+  in
+  Node.Fs.writeFileAsUtf8Sync (Node.Path.join2 fn_dest "interview.js") body
+
 let () =
   if not (Node.Fs.existsSync edge_src) then (
     Js.Console.error
       ("emit-artifacts: missing edge emit at " ^ edge_src);
+    Node.Process.exit 1);
+  if not (Node.Fs.existsSync fn_src) then (
+    Js.Console.error
+      ("emit-artifacts: missing functions emit at " ^ fn_src);
     Node.Process.exit 1);
   mkdir_sync edge_dest [%mel.obj { recursive = true }];
   if Node.Fs.existsSync edge_gen then
@@ -63,4 +79,11 @@ let () =
   copy_tree edge_src edge_gen;
   write_negotiate_wrapper ();
   console_log
-    ("emit-artifacts: wrote " ^ Node.Path.join2 edge_dest "negotiate.js")
+    ("emit-artifacts: wrote " ^ Node.Path.join2 edge_dest "negotiate.js");
+  mkdir_sync fn_dest [%mel.obj { recursive = true }];
+  if Node.Fs.existsSync fn_gen then
+    rm_sync fn_gen [%mel.obj { recursive = true; force = true }];
+  copy_tree fn_src fn_gen;
+  write_interview_wrapper ();
+  console_log
+    ("emit-artifacts: wrote " ^ Node.Path.join2 fn_dest "interview.js")

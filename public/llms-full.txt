@@ -79,4 +79,4 @@ Dinar Trade (Software Architect), eCommLink (Sr. Software Engineer; PCI-DSS virt
 
 ## When not to use this file
 
-scull7.com is a personal resume. It is not a SaaS API, MCP server, OAuth provider, or webhook hub. For routing guidance see /llms.txt.
+This file is the static resume excerpt. Recruiter-agent interviews and calendar holds are interview-me (`/openapi.json`, `/mcp`). Company OAuth is not offered. For routing guidance see /llms.txt.

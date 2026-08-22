@@ -42,7 +42,7 @@ npm run preview
 - Browser interop, Accept negotiation, Vite config, Netlify edge, e2e: **Melange** (OCaml)  
 - Crawlable HTML: **Melange** CLI (`src/melange/crawlable*.ml`)  
 - Planned split: public framework repo, private scull7.com site — [`docs/FRAMEWORK-EXTRACT.md`](docs/FRAMEWORK-EXTRACT.md) / Pinto T-14  
-- Planned interview-me v1 (recruiter-agent Q&A + calendar hold) — [`docs/INTERVIEW-ME.md`](docs/INTERVIEW-ME.md) / Pinto T-15  
+- Interview-me v1 (recruiter-agent Q&A + calendar hold) — [`docs/INTERVIEW-ME.md`](docs/INTERVIEW-ME.md) / Pinto T-15 · `/openapi.json` · `/mcp`  
 
 ## Crawlable HTML
 
@@ -75,7 +75,8 @@ src/melange/
                      # Accept negotiation (Vite preview + Netlify edge + tests)
   vite_config.ml     # Vite config + crawlable / negotiate plugins
   negotiate_edge.ml  # Netlify edge handler (copied to netlify/edge-functions/ at build)
-  e2e_*.ml           # agentic / navigation / t13 / run (npm scripts invoke the emit)
+  interview_*.ml     # interview-me (Turso, cited Q&A, verify, GCal hold, OpenAPI, MCP)
+  e2e_*.ml           # agentic / navigation / t13 / interview / run (npm scripts invoke the emit)
   dune               # melange.emit → _build/... browser, CLI, vite, edge, e2e
 scripts/
   netlify-build.sh   # dune @site, emit edge JS, vite --config <Melange emit>
@@ -113,7 +114,8 @@ JavaScript and inspects `<main id="crawlable-resume">`. Local
 
 ## Agent-readable surface
 
-- `/llms.txt` and `/llms-full.txt` — when to use this resume site (not a SaaS API)
+- `/llms.txt` and `/llms-full.txt` — when to use the static resume vs interview-me
+- `/openapi.json` and `/mcp` — recruiter-agent interview-me (not the homepage reader)
 - `/about`, `/contact`, `/privacy`, `/for-agents` — static HTML + `.md` siblings
 - Same URL serves `text/markdown` when `Accept` prefers it (`Vary: Accept`)
 - Custom `404` with recovery links (Markdown when requested)
