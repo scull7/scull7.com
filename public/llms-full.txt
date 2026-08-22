@@ -1,0 +1,82 @@
+# Nathan Sculli
+
+> Builder-leader · 20+ years · Rust · Distributed Systems
+> Director of Engineering at TensorWave · Las Vegas, NV
+> nathan@vegasbuckeye.com · https://scull7.com
+
+Director of Engineering at TensorWave and primary IC on Relay, the control plane behind the largest AMD-based GPU clouds.
+
+Twenty years as a builder-leader across AI infrastructure, financial services, data platforms, manufacturing, and SaaS. I scale orgs (100+ engineers over a career) and still ship the hard systems — Rust, OCaml, ReasonML, Haskell, JavaScript.
+
+Founder/CTO of three ventures.
+
+## Contact
+
+- [nathan@vegasbuckeye.com](mailto:nathan@vegasbuckeye.com)
+- [https://scull7.com](https://scull7.com)
+- [GitHub](https://github.com/scull7)
+- [LinkedIn](https://linkedin.com/in/scull7)
+- [crates.io](https://crates.io/users/scull7)
+
+Location: Las Vegas, NV, United States. No street address is published.
+
+## Experience
+
+### TensorWave — Director of Engineering (2024-04 – present)
+
+Primary IC and engineering leader for GPU cloud infrastructure.
+
+- Primary IC on the Relay service, enabling delivery of the largest AMD-based GPU clouds in record time
+- Lead the software development organization; architect and oversee company-wide software projects
+- Primary IC on the Event API
+- TensorWave raised $350M Series B at $1.55B post-money and operates as an AMD-powered, AMD-exclusive AI cloud
+
+https://tensorwave.com
+
+### Sub Zero Corp — Founder / CTO (2023-04 – 2024-05)
+
+- Sole IC on a web-based SaaS platform for youth sports organizations
+
+### Banner — Sr. Software Engineer (2022-01 – 2023-04)
+
+- Cut React web build time from 10 minutes to under 1 minute
+- Fixed concurrency bugs in MongoDB call paths
+- DevOps infrastructure design and implementation
+
+https://withbanner.com
+
+### Backtrace.io — Sr. Software Engineer (2020-11 – 2022-02)
+
+- Modernized the console web application's ReasonML code; delivered I18N / L10N
+- Built a new email service infrastructure
+
+### Marker Trax, LLC — Chief Solutions Architect (2019-07 – 2020-08)
+
+- Architected a casino-credit OEM product; drove it through certification for casino infrastructure
+- Generalized product for all major gaming machine manufacturers; shipped web and mobile apps
+
+### Influential — VP of Engineering (2014-10 – 2019)
+
+- Co-built a data platform that scanned, classified and searched billions of pieces of online content in real time
+- Managed 20–30 software engineers as direct reports; owned Series-A technical due diligence
+- Overall software architecture across back-end services and front-end
+
+https://influential.co
+
+### Allegiant Air — Manager of Application Development (2013-07 – 2014-09)
+
+- Designed and implemented airline SSO using PAKE, PAM and SASL
+- Managed 5–7 full life-cycle teams (PM, QA, Engineer); instituted company-wide SDLC
+
+### Earlier
+
+Dinar Trade (Software Architect), eCommLink (Sr. Software Engineer; PCI-DSS virtual HSM), Decoma SVE / Magna (MES and industrial robotics), Jamestown Industries (Technology Director).
+
+## Education
+
+- Youngstown State University — Computer Science coursework toward BS (2001–2006)
+- Cisco Networking Academy at Youngstown State University — CCNA (2006)
+
+## When not to use this file
+
+scull7.com is a personal resume. It is not a SaaS API, MCP server, OAuth provider, or webhook hub. For routing guidance see /llms.txt.

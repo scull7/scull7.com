@@ -1,5 +1,12 @@
 User-agent: *
 Allow: /
 Allow: /resume.json
+Allow: /llms.txt
+Allow: /llms-full.txt
+Allow: /about
+Allow: /contact
+Allow: /privacy
+Allow: /for-agents
+Allow: /sitemap.xml
 
 Sitemap: https://scull7.com/sitemap.xml

@@ -4,12 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0a0a0f" />
+    <meta name="author" content="Nathan Sculli" />
     <meta name="description" content="Builder-leader · 20+ years · Rust · Distributed Systems" />
+    <meta name="geo.region" content="US-NV" />
+    <meta name="geo.placename" content="Las Vegas" />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="scull7.com" />
     <meta property="og:title" content="Nathan Sculli — scull7.com" />
     <meta property="og:description" content="Builder-leader · 20+ years · Rust · Distributed Systems" />
     <meta property="og:url" content="https://scull7.com/" />
     <link rel="canonical" href="https://scull7.com/" />
+    <link rel="alternate" type="text/markdown" href="https://scull7.com/index.md" title="Markdown" />
+    <link rel="describedby" href="https://scull7.com/llms.txt" />
     <meta property="og:image" content="https://scull7.com/og.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Nathan Sculli" />
@@ -19,33 +25,66 @@
     {
       "@context": "https://schema.org",
       "@type": "Person",
+      "@id": "https://scull7.com/#nathan-sculli",
       "name": "Nathan Sculli",
+      "description": "Director of Engineering at TensorWave. Builder-leader with 20+ years across AI infrastructure, financial services, data platforms, manufacturing, and SaaS.",
       "url": "https://scull7.com",
+      "email": "nathan@vegasbuckeye.com",
       "jobTitle": "Director of Engineering",
-      "worksFor": {
-        "@type": "Organization",
-        "name": "TensorWave",
-        "url": "https://tensorwave.com"
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": "Las Vegas",
+        "addressRegion": "NV",
+        "addressCountry": "US"
       },
       "sameAs": [
         "https://github.com/scull7",
-        "https://linkedin.com/in/scull7"
-      ]
+        "https://linkedin.com/in/scull7",
+        "https://crates.io/users/scull7"
+      ],
+      "worksFor": {
+        "@type": "Organization",
+        "name": "TensorWave",
+        "url": "https://tensorwave.com",
+        "contactPoint": {
+          "@type": "ContactPoint",
+          "email": "nathan@vegasbuckeye.com",
+          "contactType": "professional"
+        },
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Las Vegas",
+          "addressRegion": "NV",
+          "addressCountry": "US"
+        }
+      }
     }
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://fonts.gstatic.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles/galaxy.css" />
     <link rel="stylesheet" href="/styles/vim.css" />
+    <link rel="stylesheet" href="/styles/static.css" />
     <title>Nathan Sculli</title>
+    <script>
+      document.documentElement.classList.add("has-js");
+    </script>
   </head>
   <body>
     <div id="app"></div>
-    <noscript id="crawlable-resume"></noscript>
-    <script type="module" src="/src/main.js"></script>
+    <nav id="static-nav" aria-label="Site">
+      <a href="/">Home</a>
+      <a href="/about">About</a>
+      <a href="/contact">Contact</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/for-agents">For agents</a>
+      <a href="/llms.txt">llms.txt</a>
+    </nav>
+    <main id="crawlable-resume"></main>
+    <script type="module" src="/_build/default/src/melange/output/src/melange/main.js"></script>
   </body>
 </html>

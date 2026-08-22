@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en" class="dark" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="author" content="Nathan Sculli" />
+    <meta name="description" content="Developer resources for agents reading scull7.com — markdown, llms.txt, sitemap, JSON Resume." />
+    <title>scull7.com developer resources — for agents</title>
+    <link rel="canonical" href="https://scull7.com/for-agents" />
+    <link rel="alternate" type="text/markdown" href="https://scull7.com/for-agents.md" title="Markdown" />
+    <link rel="describedby" href="https://scull7.com/llms.txt" />
+    <link rel="stylesheet" href="/styles/galaxy.css" />
+    <link rel="stylesheet" href="/styles/static.css" />
+  </head>
+  <body class="static-page">
+    <nav id="static-nav" aria-label="Site">
+      <a href="/">Home</a>
+      <a href="/about">About</a>
+      <a href="/contact">Contact</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/for-agents">For agents</a>
+      <a href="/llms.txt">llms.txt</a>
+    </nav>
+    <main class="static-doc">
+      <header class="static-brand">scull7.com / for-agents</header>
+      <h1>scull7.com developer resources</h1>
+      <p>
+        This page documents the machine-readable surface of Nathan Sculli’s
+        personal resume site. It does not describe a product API, an MCP
+        server, OAuth, or webhooks — those are not operated here.
+      </p>
+      <h2>Start here</h2>
+      <ul>
+        <li><a href="/llms.txt">/llms.txt</a> — when to use this site, and links to Markdown pages</li>
+        <li><a href="/llms-full.txt">/llms-full.txt</a> — longer resume excerpt</li>
+        <li><a href="/sitemap.xml">/sitemap.xml</a> — indexable URLs</li>
+        <li><a href="/robots.txt">/robots.txt</a> — crawler policy</li>
+        <li><a href="/resume.json">/resume.json</a> — JSON Resume 1.0 source of career facts</li>
+      </ul>
+      <h2>Markdown on the same URL</h2>
+      <p>
+        Pages that have an HTML representation also serve
+        <code>text/markdown; charset=utf-8</code> when the request
+        <code>Accept</code> header prefers Markdown. Responses include
+        <code>Vary: Accept</code>. Clients that reject both HTML and Markdown
+        receive <code>406 Not Acceptable</code>. Ordinary browsers that send
+        <code>text/html</code> keep getting HTML. Sibling files such as
+        <a href="/index.md">/index.md</a> and
+        <a href="/about.md">/about.md</a> exist for direct fetch.
+      </p>
+      <h2>Trust pages</h2>
+      <p>
+        <a href="/about">/about</a>,
+        <a href="/contact">/contact</a>, and
+        <a href="/privacy">/privacy</a> are static HTML (and Markdown) with
+        the same name, email, and Las Vegas, NV identity as the homepage.
+      </p>
+      <h2>What is not here</h2>
+      <p>
+        There is no <code>/api</code>, no OpenAPI document, no MCP endpoint,
+        and no webhook receiver. If a tool asks for those, it has the wrong
+        host. Use <a href="/contact">contact</a> for humans.
+      </p>
+      <footer class="static-footer">
+        <p class="static-nap">
+          Nathan Sculli · Las Vegas, NV · nathan@vegasbuckeye.com ·
+          https://scull7.com
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>

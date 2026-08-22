@@ -1,0 +1,93 @@
+/* No-JS homepage + static trust pages. Hidden for JS users on `/` so Elm
+   remains the only primary UI. Crawlers that do not run JS still see the
+   raw HTML in the document body (not noscript). */
+
+html.has-js #static-nav,
+html.has-js #crawlable-resume {
+  display: none;
+}
+
+#static-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 1.25rem var(--pad) 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+#crawlable-resume,
+.static-doc {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 1.5rem var(--pad) 4rem;
+}
+
+#crawlable-resume h1,
+.static-doc h1 {
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.5rem;
+}
+
+#crawlable-resume h2,
+.static-doc h2 {
+  font-size: 1.25rem;
+  margin: 1.75rem 0 0.5rem;
+  color: var(--accent-cyan);
+}
+
+#crawlable-resume h3,
+.static-doc h3 {
+  font-size: 1.05rem;
+  margin: 1.1rem 0 0.35rem;
+  color: var(--text);
+}
+
+#crawlable-resume p,
+.static-doc p,
+#crawlable-resume li,
+.static-doc li {
+  color: var(--text-dim);
+}
+
+#crawlable-resume section {
+  margin: 1.5rem 0;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+}
+
+.static-doc header.static-brand {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-mute);
+  margin-bottom: 1.5rem;
+}
+
+.static-footer {
+  margin-top: 3rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--glass-border);
+  font-size: 0.92rem;
+  color: var(--text-mute);
+}
+
+.static-nap {
+  margin-top: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+body.static-page {
+  min-height: 100dvh;
+  background:
+    radial-gradient(1200px 700px at 12% 18%, var(--nebula-1), transparent 60%),
+    radial-gradient(900px 600px at 82% 28%, var(--nebula-2), transparent 55%),
+    radial-gradient(ellipse at center, #0d0f1a 0%, var(--bg-void) 70%);
+}
