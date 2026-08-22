@@ -12,6 +12,10 @@ Twenty years of shipping systems and leading engineers across AI infrastructure,
 
 He has been founder or CTO of three ventures, including Sub Zero Corp. Earlier roles include Banner, Backtrace.io, Marker Trax, Vice President of Engineering at Influential, and engineering leadership at Allegiant Air. Public profiles live on [GitHub](https://github.com/scull7), [LinkedIn](https://linkedin.com/in/scull7), and [crates.io](https://crates.io/users/scull7).
 
+## What I want next
+
+I'm looking for a leadership role where I can do both people leadership and software architecture, on work with real-world impact.
+
 ## Name, location, and contact
 
 The same identity is used across this site: Nathan Sculli; Las Vegas, NV, United States; email [nathan@vegasbuckeye.com](mailto:nathan@vegasbuckeye.com); site [https://scull7.com](https://scull7.com). No street address is published. For mail and introductions, use the [contact](https://scull7.com/contact) page.

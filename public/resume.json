@@ -3,7 +3,7 @@
   "meta": {
     "canonical": "https://scull7.com/resume.json",
     "version": "1.0.0",
-    "lastModified": "2026-08-21T01:22:31Z"
+    "lastModified": "2026-08-22T23:24:00Z"
   },
   "basics": {
     "name": "Nathan Sculli",
@@ -12,7 +12,7 @@
     "email": "nathan@vegasbuckeye.com",
     "phone": "",
     "url": "https://scull7.com",
-    "summary": "Director of Engineering at TensorWave and primary IC on Relay, the control plane behind the largest AMD-based GPU clouds.\n\nTwenty years as a builder-leader across AI infrastructure, financial services, data platforms, manufacturing, and SaaS. I scale orgs (100+ engineers over a career) and still ship the hard systems — Rust, OCaml, ReasonML, Haskell, JavaScript.\n\nFounder/CTO of three ventures.",
+    "summary": "Director of Engineering at TensorWave and primary IC on Relay, the control plane behind the largest AMD-based GPU clouds.\n\nTwenty years as a builder-leader across AI infrastructure, financial services, data platforms, manufacturing, and SaaS. I scale orgs (100+ engineers over a career) and still ship the hard systems — Rust, OCaml, ReasonML, Haskell, JavaScript.\n\nFounder/CTO of three ventures.\n\nI'm looking for a leadership role where I can do both people leadership and software architecture, on work with real-world impact.",
     "location": {
       "address": "",
       "postalCode": "",
