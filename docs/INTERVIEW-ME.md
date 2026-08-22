@@ -3,7 +3,7 @@
 **Date:** 2026-08-22  
 **Status:** Planned — do not implement the product in this change  
 **Tracker:** Pinto [T-15](../.pinto/tasks/T-15.md)  
-**Decisions:** Nathan, 2026-08-22 — locked; do not reopen
+**Decisions:** Nathan, 2026-08-22 — locked (including hold length, calendar, storage, blocklist); do not reopen
 
 ## Job
 
@@ -44,7 +44,7 @@ v1 includes **named sessions** and a **booking request**.
 
 ### Work email
 
-Reject common free providers for work email unless allowlisted. Default blocklist (open list Nathan can edit):
+Reject common free providers for work email unless allowlisted. Default blocklist (locked):
 
 - gmail
 - yahoo
@@ -52,15 +52,25 @@ Reject common free providers for work email unless allowlisted. Default blocklis
 - outlook.com
 - icloud
 
+The list **must** be configurable — do not hard-code it forever.
+
+When a hold is created, Nathan receives a hold notification email with an easy one-click way to add to the banned list. Assumption: that email offers both **ban this address** and **ban this domain**. Both links are the default.
+
 ## Calendar holds
 
 A booking request creates a **tentative Google Calendar hold**. The Calendar connector already exists for Nathan.
 
 Required before a hold: verified work email and a short-lived book token for that session.
 
-Create-hold inputs: start, end, book token. Result: a tentative GCal event.
+Create-hold inputs: start, end, book token. Result: a tentative GCal event. Default hold length is **1 hour**.
 
-Hold duration, which calendar, and storage are unset — see Open decisions.
+Holds go to the **default scull7.com Google Calendar**. Which calendar is used **must** be configurable — do not hard-code it forever.
+
+Creating a hold also sends Nathan the hold notification email described under Auth.
+
+## Storage
+
+Sessions, tokens, and holds persist in a **Turso** database. Not Netlify Blobs. Not an unspecified store.
 
 ## HTTP / MCP surfaces
 
@@ -121,14 +131,7 @@ No other event names in v1.
 
 ## Open decisions
 
-Unset. Do not treat a guess as locked.
-
-| Decision | Notes |
-|----------|--------|
-| Hold duration | How long a tentative hold lasts / default meeting length |
-| Which calendar | Which of Nathan’s Google calendars receives the hold |
-| Storage | Where sessions, tokens, and holds persist |
-| Free-email blocklist | Default reject list above; Nathan can edit the list and the allowlist |
+None remaining from the 2026-08-22 list. Hold length, calendar, storage, and the free-email blocklist are locked in Auth, Calendar holds, and Storage.
 
 ## In this repo (now)
 
@@ -136,4 +139,4 @@ This note is the durable v1 spec. Do **not** implement interview-me in this chan
 
 ## Later (T-15)
 
-Implement interview-me v1 against this spec. Keep the locked decisions. Leave the open decisions for Nathan.
+Implement interview-me v1 against this spec. Keep the locked decisions.
