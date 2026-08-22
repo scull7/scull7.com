@@ -37,10 +37,20 @@ type source = string -> string option
 
 external process_env : string Js.Dict.t = "env" [@@mel.module "process"]
 
+external netlify_env_get : string -> string Js.undefined = "get"
+[@@mel.scope ("Netlify", "env")]
+
+let netlify_source name =
+  try
+    match Js.Undefined.toOption (netlify_env_get name) with
+    | Some v when String.trim v <> "" -> Some (String.trim v)
+    | _ -> None
+  with _ -> None
+
 let process_source name =
   match Js.Dict.get process_env name with
   | Some v when String.trim v <> "" -> Some (String.trim v)
-  | _ -> None
+  | _ -> netlify_source name
 
 let default_blocklist =
   [ "gmail"; "yahoo"; "hotmail"; "outlook.com"; "icloud" ]

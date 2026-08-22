@@ -168,13 +168,32 @@ module Memory = struct
     }
 end
 
+external js_message : 'a -> string Js.undefined = "message" [@@mel.get]
+
+let js_err_message err =
+  match Js.Undefined.toOption (js_message err) with
+  | Some m when String.trim m <> "" -> m
+  | _ -> "fetch failed"
+
+let strip_slash u =
+  if String.ends_with ~suffix:"/" u && String.length u > 1 then
+    String.sub u 0 (String.length u - 1)
+  else u
+
 let http_url raw =
   let u = String.trim raw in
-  if String.starts_with ~prefix:"libsql://" u then
-    "https://" ^ String.sub u 9 (String.length u - 9)
-  else if String.starts_with ~prefix:"https://" u then u
-  else if String.starts_with ~prefix:"http://" u then u
-  else "https://" ^ u
+  let u =
+    if String.starts_with ~prefix:"libsql://" u then
+      "https://" ^ String.sub u 9 (String.length u - 9)
+    else if String.starts_with ~prefix:"https://" u then u
+    else if String.starts_with ~prefix:"http://" u then u
+    else "https://" ^ u
+  in
+  strip_slash u
+
+let pipeline_url raw =
+  let u = http_url raw in
+  if String.ends_with ~suffix:"/v2/pipeline" u then u else u ^ "/v2/pipeline"
 
 let arg_text v =
   Interview_json.obj
@@ -203,6 +222,7 @@ let exec_stmt sql args =
 let pipeline_body stmts =
   Interview_json.obj
     [
+      ("baton", Interview_json.null);
       ( "requests",
         Interview_json.arr
           (stmts @ [ Interview_json.obj [ ("type", Interview_json.str "close") ] ])
@@ -319,7 +339,7 @@ let pipeline_error json =
       loop 0
 
 let turso ~url ~token () : t =
-  let endpoint = http_url url ^ "/v2/pipeline" in
+  let endpoint = pipeline_url url in
   let ready = ref false in
   let post stmts =
     let headers = Js.Dict.empty () in
@@ -327,6 +347,9 @@ let turso ~url ~token () : t =
     Js.Dict.set headers "Content-Type" "application/json";
     Interview_http_fetch.post endpoint ~headers
       ~body:(Interview_json.json_stringify (pipeline_body stmts))
+    |> Js.Promise.catch (fun e ->
+           Js.Promise.reject
+             (Failure ("turso fetch failed: " ^ js_err_message e)))
     >>= fun res ->
     Interview_http_fetch.response_text res >>= fun body ->
     let status = Interview_http_fetch.response_status res in
