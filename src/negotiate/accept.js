@@ -55,8 +55,8 @@ function matches(entry, candidate) {
 
 /**
  * Pick the best of `produces` for this Accept header.
- * Missing / blank Accept → produces[0] (HTML). `*/*` also prefers produces[0]
- * when q-values tie, so ordinary browsers are never 406'd.
+ * Missing / blank Accept -> produces[0] (HTML). A catch-all Accept also
+ * prefers produces[0] when q-values tie, so ordinary browsers are never 406'd.
  *
  * @param {string | null | undefined} header
  * @param {string[]} produces

@@ -80,7 +80,7 @@ function proveTrustPageFiles() {
   }
   const llms = readFileSync(path.join(ROOT, "public/llms.txt"), "utf8");
   assert(/When to use this/i.test(llms), "llms.txt missing When to use this");
-  assert(/not a SaaS API/i.test(llms), "llms.txt missing not-for jobs");
+  assert(/not a SaaS API/i.test(llms) && /not an MCP server/i.test(llms), "llms.txt missing not-for jobs");
   assert(/TensorWave/.test(llms), "llms.txt missing TensorWave");
   pass("trust pages + llms.txt on disk");
 }

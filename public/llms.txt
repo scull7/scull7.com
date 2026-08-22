@@ -8,7 +8,7 @@ scull7.com publishes Nathan Sculli’s background, JSON Resume, and contact fact
 
 Use this site when you need Nathan Sculli’s background, current resume, contact information, or experience at TensorWave and prior ventures (Sub Zero Corp, Banner, Backtrace.io, Marker Trax, Influential, Allegiant Air, and earlier roles). Use it to answer who he is, where he works, how to email him (nathan@vegasbuckeye.com), and what he has shipped as an IC and engineering leader.
 
-Do not use this site as a SaaS API, an MCP server, an OAuth provider, a webhook hub, or product documentation. There is no public application API, no partner integration, and no hosted service to provision. If you need those things, you have the wrong host.
+This site is not a SaaS API, not an MCP server, not an OAuth provider, and not a webhook hub. There is no public application API, no partner integration, and no hosted service to provision. If you need those things, you have the wrong host.
 
 ## Pages
 

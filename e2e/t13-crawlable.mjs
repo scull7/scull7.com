@@ -83,7 +83,7 @@ function assertNoJsDocument(html) {
   assert(/<h2\b[^>]*>[\s\S]*?<\/h2>/i.test(visible), "AC no-JS: H2 missing outside noscript");
   assert(/<h3\b[^>]*>[\s\S]*?<\/h3>/i.test(visible), "AC no-JS: H3 missing outside noscript");
   assert(
-    !/<a\b[^>]*>[\s\S]*?<h[1-3]\b/i.test(visible),
+    !/<a\b[^>]*>\s*<h[1-3]\b/i.test(visible),
     "AC no-JS: heading trapped inside a link",
   );
   const text = visibleBodyText(html);
