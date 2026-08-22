@@ -54,9 +54,10 @@ opam install . --deps-only -y
 
 echo "→ dune build @site (Melange)"
 opam exec -- dune build @site
+node _build/default/src/melange/artifacts/src/melange/emit_artifacts.cjs
 
 echo "→ vite build"
-npx vite build
+npx vite build --config _build/default/src/melange/vite/src/melange/vite_config.js
 
 echo "→ build ok"
 ls -la dist
