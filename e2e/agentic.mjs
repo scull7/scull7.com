@@ -9,6 +9,7 @@ import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { preferredType, PRODUCES } from "../src/negotiate/accept.js";
+import { planNegotiation } from "../src/negotiate/plan.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = process.env.AGENTIC_PORT || "4176";
@@ -63,6 +64,49 @@ function proveAcceptParsing() {
     "markdown q=0 against md-only should 406",
   );
   pass("Accept parsing q-values / 406 / browser header");
+}
+
+function proveMissingPathMarkdownPlan() {
+  const missingMd = planNegotiation({
+    accept: "text/markdown",
+    pageMdExists: false,
+    originStatus: 404,
+  });
+  assert(
+    missingMd.action === "not-found-markdown" && missingMd.status === 404,
+    `missing path + Accept: text/markdown → ${missingMd.action} ${missingMd.status} (want not-found-markdown 404, not 406)`,
+  );
+
+  const missingHtml = planNegotiation({
+    accept: null,
+    pageMdExists: false,
+    originStatus: 404,
+  });
+  assert(
+    missingHtml.action === "not-found-html" && missingHtml.status === 404,
+    `missing path + browser Accept → ${missingHtml.action}`,
+  );
+
+  const pdf = planNegotiation({
+    accept: "application/pdf",
+    pageMdExists: false,
+    originStatus: 404,
+  });
+  assert(
+    pdf.action === "not-acceptable" && pdf.status === 406,
+    `application/pdf → ${pdf.action} ${pdf.status}`,
+  );
+
+  const pageMd = planNegotiation({
+    accept: "text/markdown",
+    pageMdExists: true,
+    originStatus: 200,
+  });
+  assert(
+    pageMd.action === "page-markdown" && pageMd.status === 200,
+    `existing .md sibling → ${pageMd.action}`,
+  );
+  pass("edge plan: missing path + Accept markdown is 404, not 406");
 }
 
 function proveTrustPageFiles() {
@@ -252,10 +296,17 @@ async function proveHttp() {
     cache: "no-store",
     headers: { Accept: "text/markdown" },
   });
-  assert(md404.status === 404, `markdown 404 status ${md404.status}`);
+  assert(
+    md404.status === 404,
+    `missing path + Accept: text/markdown status ${md404.status} (must be 404 with 404.md, not 406)`,
+  );
   assert(
     (md404.headers.get("content-type") || "").startsWith("text/markdown"),
     `markdown 404 Content-Type=${md404.headers.get("content-type")}`,
+  );
+  assert(
+    md404.status !== 406,
+    "missing path + Accept: text/markdown must not 406 before /404.md",
   );
   const md404Body = await md404.text();
   for (const token of ["sitemap", "llms.txt", "about", "contact", "privacy"]) {
@@ -277,6 +328,7 @@ let preview;
 async function main() {
   try {
     proveAcceptParsing();
+    proveMissingPathMarkdownPlan();
     proveTrustPageFiles();
 
     if (process.env.SKIP_BUILD !== "1") {

@@ -7,15 +7,9 @@
  * so sibling fetches cannot recurse.
  */
 
-import {
-  HTML_TYPE,
-  MARKDOWN_TYPE,
-  PRODUCES,
-  preferredType,
-  varyAcceptValue,
-  notAcceptableBody,
-} from "../../src/negotiate/accept.js";
+import { MARKDOWN_TYPE, varyAcceptValue, notAcceptableBody } from "../../src/negotiate/accept.js";
 import { markdownCandidates, normalizePath } from "../../src/negotiate/resolve.js";
+import { planNegotiation } from "../../src/negotiate/plan.js";
 
 export const config = {
   path: "/*",
@@ -55,8 +49,8 @@ export default async (request, context) => {
   }
 
   const accept = request.headers.get("accept");
-  const chosen = preferredType(accept, PRODUCES);
-  if (chosen === null) {
+  const early = planNegotiation({ accept, pageMdExists: false });
+  if (early.action === "not-acceptable") {
     return withHeaders(406, "text/plain; charset=utf-8", notAcceptableBody(accept || ""), {
       "Cache-Control": "no-store",
     });
@@ -65,7 +59,7 @@ export default async (request, context) => {
   const clean = normalizePath(url.pathname);
   const mdPaths = markdownCandidates(clean);
 
-  if (chosen === MARKDOWN_TYPE) {
+  if (early.chosen === MARKDOWN_TYPE) {
     for (const mdPath of mdPaths) {
       const mdRes = await fetchSibling(request, mdPath);
       if (mdRes.ok) {
@@ -75,23 +69,32 @@ export default async (request, context) => {
         });
       }
     }
-    if (!preferredType(accept, [HTML_TYPE])) {
-      return withHeaders(406, "text/plain; charset=utf-8", notAcceptableBody(accept || ""), {
-        "Cache-Control": "no-store",
-      });
+  }
+
+  // No page-specific .md sibling. Do not 406: Accept: text/markdown still
+  // matches /404.md on a missing path. 406 is only not-acceptable above.
+  const origin = await context.next();
+  const plan = planNegotiation({
+    accept,
+    pageMdExists: false,
+    originStatus: origin.status,
+  });
+
+  if (plan.action === "not-acceptable") {
+    return withHeaders(406, "text/plain; charset=utf-8", notAcceptableBody(accept || ""), {
+      "Cache-Control": "no-store",
+    });
+  }
+
+  if (plan.action === "not-found-markdown") {
+    const md404 = await fetchSibling(request, "/404.md");
+    if (md404.ok) {
+      const body = request.method === "HEAD" ? null : await md404.text();
+      return withHeaders(404, "text/markdown; charset=utf-8", body);
     }
   }
 
-  const origin = await context.next();
-
   if (origin.status === 404) {
-    if (chosen === MARKDOWN_TYPE) {
-      const md404 = await fetchSibling(request, "/404.md");
-      if (md404.ok) {
-        const body = request.method === "HEAD" ? null : await md404.text();
-        return withHeaders(404, "text/markdown; charset=utf-8", body);
-      }
-    }
     const headers = new Headers(origin.headers);
     headers.set("Vary", varyAcceptValue(headers.get("Vary")));
     return new Response(origin.body, { status: 404, headers });
