@@ -28,6 +28,25 @@ external stdout_write : 'a -> unit = "write" [@@mel.scope ("process", "stdout")]
 external stderr_write : 'a -> unit = "write" [@@mel.scope ("process", "stderr")]
 external console_log : string -> unit = "log" [@@mel.scope "console"]
 external console_error : string -> unit = "error" [@@mel.scope "console"]
+external console_error_any : 'a -> unit = "error" [@@mel.scope "console"]
+external js_message : 'a -> string Js.undefined = "message" [@@mel.get]
+external exn_id : 'a -> string Js.undefined = "RE_EXN_ID" [@@mel.get]
+external exn_payload : 'a -> string Js.undefined = "_1" [@@mel.get]
+external json_stringify_any : 'a -> string = "stringify" [@@mel.scope "JSON"]
+
+let error_to_string err =
+  match Js.Undefined.toOption (js_message err) with
+  | Some m when m <> "" && m <> "Failure" && m <> "Error" -> m
+  | _ -> (
+      match
+        ( Js.Undefined.toOption (exn_id err),
+          Js.Undefined.toOption (exn_payload err) )
+      with
+      | Some id, Some p -> id ^ ": " ^ p
+      | Some id, None -> id
+      | None, Some p -> p
+      | None, None -> (
+          try json_stringify_any err with _ -> "unknown error"))
 
 external spawn :
   string ->

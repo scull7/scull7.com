@@ -73,13 +73,8 @@ let run () =
          finish 0;
          Js.Promise.resolve ())
   |> Js.Promise.catch (fun err ->
-         let msg =
-           match Js.Exn.message (Obj.magic err) with
-           | Some m -> m
-           | None ->
-               try Printexc.to_string (Obj.magic err) with _ -> "unknown error"
-         in
-         E2e_ffi.console_error ("e2e/run FAIL: " ^ msg);
+         E2e_ffi.console_error_any err;
+         E2e_ffi.console_error ("e2e/run FAIL: " ^ E2e_ffi.error_to_string err);
          finish 1;
          Js.Promise.resolve ())
   |> ignore

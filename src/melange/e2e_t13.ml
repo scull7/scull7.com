@@ -27,8 +27,8 @@ module Prod = struct
   let backtrace = "Backtrace.io"
   let marker_trax = "Marker Trax"
   let title = "Nathan Sculli"
-  let og_title = "Nathan Sculli — scull7.com"
-  let description = "Builder-leader · 20+ years · Rust · Distributed Systems"
+  let og_title = {js|Nathan Sculli — scull7.com|js}
+  let description = {js|Builder-leader · 20+ years · Rust · Distributed Systems|js}
   let job_title = "Director of Engineering"
 end
 
@@ -415,7 +415,8 @@ let with_resume_restored label fn =
         (try restore_resume () with _ -> ());
         reject (Obj.magic err : exn) [@u]
       in
-      fn ()
+      (try fn ()
+       with exn -> Js.Promise.reject exn)
       |> Js.Promise.then_ (fun () ->
              ok ();
              Js.Promise.resolve ())
@@ -526,13 +527,9 @@ let run () =
   in
   body
   |> Js.Promise.catch (fun err ->
-         let msg =
-           match Js.Exn.message (Obj.magic err) with
-           | Some m -> m
-           | None ->
-               try Printexc.to_string (Obj.magic err) with _ -> "unknown error"
-         in
-         E2e_ffi.console_error ("e2e/t13-crawlable FAIL: " ^ msg);
+         E2e_ffi.console_error_any err;
+         E2e_ffi.console_error
+           ("e2e/t13-crawlable FAIL: " ^ E2e_ffi.error_to_string err);
          finish 1;
          Js.Promise.resolve ())
   |> ignore

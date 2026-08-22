@@ -8,6 +8,12 @@ external mkdir_sync : string -> < recursive : bool > Js.t -> unit
 external copy_file_sync : string -> string -> unit = "copyFileSync"
 [@@mel.module "fs"]
 
+external rm_sync : string -> < recursive : bool ; force : bool > Js.t -> unit
+  = "rmSync"
+[@@mel.module "fs"]
+
+external chmod_sync : string -> int -> unit = "chmodSync" [@@mel.module "fs"]
+
 external stat_sync :
   string ->
   < isDirectory : (unit -> bool[@mel.meth])
@@ -35,7 +41,9 @@ let rec copy_tree src dest =
         let toward = Node.Path.join2 dest name in
         let st = stat_sync from in
         if st##isDirectory () then copy_tree from toward
-        else if st##isFile () then copy_file_sync from toward)
+        else if st##isFile () then (
+          copy_file_sync from toward;
+          chmod_sync toward 0o644))
     (Node.Fs.readdirSync src)
 
 let write_negotiate_wrapper () =
@@ -50,6 +58,8 @@ let () =
       ("emit-artifacts: missing edge emit at " ^ edge_src);
     Node.Process.exit 1);
   mkdir_sync edge_dest [%mel.obj { recursive = true }];
+  if Node.Fs.existsSync edge_gen then
+    rm_sync edge_gen [%mel.obj { recursive = true; force = true }];
   copy_tree edge_src edge_gen;
   write_negotiate_wrapper ();
   console_log

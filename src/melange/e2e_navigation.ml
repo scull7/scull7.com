@@ -106,8 +106,7 @@ let run () =
         E2e_ffi.assert_ (kw > 0) "code highlight missing .kw spans";
         keyboard_press (page_keyboard page) ":" >>= fun () ->
         page_wait_for_timeout page 300 >>= fun () ->
-        page_evaluate page
-          "() => document.activeElement && document.activeElement.id"
+        page_evaluate page "document.activeElement && document.activeElement.id"
         >>= fun focused ->
         E2e_ffi.assert_ (focused = "palette-input")
           ("palette not focused, got " ^ focused);
@@ -151,14 +150,9 @@ let run () =
         E2e_ffi.set_exit_code 0;
         Node.Process.exit 0)
   |> Js.Promise.catch (fun err ->
-         let msg =
-           match Js.Exn.message (Obj.magic err) with
-           | Some m -> m
-           | None ->
-               (try Printexc.to_string (Obj.magic err)
-                with _ -> "unknown error")
-         in
-         E2e_ffi.console_error ("e2e/navigation FAIL: " ^ msg);
+         E2e_ffi.console_error_any err;
+         E2e_ffi.console_error
+           ("e2e/navigation FAIL: " ^ E2e_ffi.error_to_string err);
          E2e_ffi.set_exit_code 1;
          Node.Process.exit 1)
   |> ignore

@@ -281,12 +281,9 @@ let run () =
            finish 0;
            Js.Promise.resolve ())
     |> Js.Promise.catch (fun err ->
-           let msg =
-             try Js.Exn.message (Obj.magic err) |> fun o ->
-                 match o with Some m -> m | None -> "unknown error"
-             with _ -> "unknown error"
-           in
-           E2e_ffi.console_error ("e2e/agentic FAIL: " ^ msg);
+           E2e_ffi.console_error_any err;
+           E2e_ffi.console_error
+             ("e2e/agentic FAIL: " ^ E2e_ffi.error_to_string err);
            finish 1;
            Js.Promise.resolve ())
     |> ignore
