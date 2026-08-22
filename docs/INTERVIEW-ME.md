@@ -166,8 +166,8 @@ Do not commit secrets. Config fails closed when a required secret is missing (HT
 
 | Variable | Role | Default / notes |
 |----------|------|-----------------|
-| `TURSO_DATABASE_URL` | libSQL / Turso database | Required for sessions, tokens, holds. `libsql://` is rewritten to HTTPS. May be unset on the Netlify site today. |
-| `TURSO_AUTH_TOKEN` | Turso auth | Required with the URL. Already on Netlify site `cv-scull7` for production + deploy-preview. |
+| `TURSO_DATABASE_URL` | libSQL / Turso database | Required for sessions, tokens, holds. `libsql://` is rewritten to HTTPS. Set on Netlify site `cv-scull7` for production + deploy-preview (database `interview-me` in org/group `scull7`). |
+| `TURSO_AUTH_TOKEN` | Turso auth | Required with the URL. Set on Netlify site `cv-scull7` for production + deploy-preview. |
 | `INTERVIEW_MAGIC_LINK_SECRET` | HMAC for magic-link / book / ban tokens | Required before verify or hold. |
 | `INTERVIEW_HOLD_CAP` | Active tentative holds per work domain | `3` |
 | `INTERVIEW_REQUIRED_QUESTIONS` | Required set (CSV ids or JSON array) | The five locked items |
@@ -180,9 +180,8 @@ Do not commit secrets. Config fails closed when a required secret is missing (HT
 | `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` / `GOOGLE_OAUTH_REFRESH_TOKEN` | Calendar (and optional Gmail later) | Preferred Calendar connector. |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` or `GOOGLE_CLIENT_EMAIL` + `GOOGLE_PRIVATE_KEY` | Alternate Calendar auth | Used if OAuth refresh is unset. |
 | `INTERVIEW_SITE_URL` | Public origin for magic/ban links | `https://scull7.com` (deploy uses the request/site URL when present) |
-| `INTERVIEW_STORE=memory` | Test-only in-process store | Never the production default. Production is Turso. |
 
-`/openapi.json` and MCP `initialize` / `tools/list` work without Turso. Session, verify, and hold operations do not.
+Sessions, tokens, and holds use Turso via `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` only. No other store backend. If either variable is missing, session/verify/hold operations fail closed. `/openapi.json` and MCP `initialize` / `tools/list` still load.
 
 ## Later
 
