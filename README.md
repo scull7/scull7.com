@@ -42,6 +42,7 @@ npm run preview
 - Browser interop, Accept negotiation, Vite config, Netlify edge, e2e: **Melange** (OCaml)  
 - Crawlable HTML: **Melange** CLI (`src/melange/crawlable*.ml`)  
 - Planned split: public framework repo, private scull7.com site — [`docs/FRAMEWORK-EXTRACT.md`](docs/FRAMEWORK-EXTRACT.md) / Pinto T-14  
+- Planned interview-me v1 (recruiter-agent Q&A + calendar hold) — [`docs/INTERVIEW-ME.md`](docs/INTERVIEW-ME.md) / Pinto T-15  
 
 ## Crawlable HTML
 
