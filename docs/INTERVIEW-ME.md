@@ -3,7 +3,7 @@
 **Date:** 2026-08-22  
 **Status:** Planned — do not implement the product in this change  
 **Tracker:** Pinto [T-15](../.pinto/tasks/T-15.md)  
-**Decisions:** Nathan, 2026-08-22 — locked (including hold length, calendar, storage, blocklist); do not reopen
+**Decisions:** Nathan, 2026-08-22 — locked (including hold length, calendar, storage, blocklist, hold cap, required question set); do not reopen
 
 ## Job
 
@@ -31,7 +31,7 @@ v1 includes **named sessions** and a **booking request**.
 2. The agent **asks questions**. Answers are cited from published facts (`public/resume.json` and public site pages). Refuse anything not in that corpus. No invented career facts.
 3. Q&A can stay open **without** verification.
 4. To book, the agent **requests a verification email**. Email verify is a human step: the recruiter receives a magic link, clicks once, the agent receives a short-lived book token. The agent never needs inbox access.
-5. With that book token, the agent **creates a hold** (start/end). A booking request creates a **tentative Google Calendar hold**.
+5. With that book token, the agent **creates a hold** (start/end) only if the session has **completed the required question set** and the work domain is **under the active-hold cap**. A booking request creates a **tentative Google Calendar hold**.
 6. A work email must be verified **before any calendar hold**.
 
 ## Auth
@@ -60,13 +60,35 @@ When a hold is created, Nathan receives a hold notification email with an easy o
 
 A booking request creates a **tentative Google Calendar hold**. The Calendar connector already exists for Nathan.
 
-Required before a hold: verified work email and a short-lived book token for that session.
+Required before a hold: verified work email, a short-lived book token for that session, a completed required question set (a refusal does not count), and a work domain under the active-hold cap.
 
 Create-hold inputs: start, end, book token. Result: a tentative GCal event. Default hold length is **1 hour**.
 
 Holds go to the **default scull7.com Google Calendar**. Which calendar is used **must** be configurable — do not hard-code it forever.
 
 Creating a hold also sends Nathan the hold notification email described under Auth.
+
+### Active-hold cap
+
+A work domain may have at most **N** active tentative holds at once. Default **N=3**. That cap **must** be configurable — do not hard-code it forever.
+
+The work domain is the domain of the session’s work email.
+
+### Required question set (earn the hold)
+
+Booking / `create_hold` is allowed only after the session has completed a required question set. Refuses do not count as completion.
+
+Default required set (locked, five items):
+
+1. Cited answer on current work (TensorWave / Relay)
+2. Cited answer on leadership scale
+3. Cited answer on systems depth (Rust / distributed systems)
+4. Cited answer on what Nathan wants next
+5. Hiring timeline, stated by the recruiter (their fact, not a resume citation)
+
+The required set **must** be configurable — same rule as the free-email blocklist. Do not hard-code it forever.
+
+Items 1–4 are cited answers from the published corpus. Item 5 is the recruiter’s fact, recorded on the session; it is not cited from `resume.json` or public site pages and does not invent a career fact.
 
 ## Storage
 
@@ -84,7 +106,7 @@ Documented behavior, not an implementation. Do **not** add surfaces beyond this 
 | Ask question | Cited answer from the corpus, or a refusal if the fact is not published. |
 | Request verification email | Sends the magic link to the session’s work email. |
 | Verify magic link | Human click. Issues a short-lived book token scoped to that session. |
-| Create hold | start/end + book token → tentative GCal event. No hold without a valid token. |
+| Create hold | start/end + book token → tentative GCal event. No hold without a valid token, a completed required set, and a work domain under the cap. |
 | Get resume | Published resume facts from the same corpus. |
 | Search experience | Search published experience facts from the same corpus. |
 
@@ -99,7 +121,7 @@ MCP at `/mcp`. Tools:
 | `start_interview` | Same as start session |
 | `ask_nathan` | Same as ask question |
 | `request_verification` | Same as request verification email |
-| `create_hold` | Same as create hold (requires the book token) |
+| `create_hold` | Same as create hold (requires the book token, completed required set, and domain under the cap) |
 | `get_resume` | Same as get resume |
 
 No other MCP tools in v1. Verify stays a human magic-link click.
@@ -128,10 +150,11 @@ No other event names in v1.
 - Publishing a street address
 - Invented career facts or answers outside `resume.json` and public site pages
 - Stub OpenAPI, stub MCP, or stub webhooks
+- Hard-coding the hold cap or the required question set with no configuration
 
 ## Open decisions
 
-None remaining from the 2026-08-22 list. Hold length, calendar, storage, and the free-email blocklist are locked in Auth, Calendar holds, and Storage.
+None remaining from the 2026-08-22 list. Hold length, calendar, storage, the free-email blocklist, the active-hold cap, and the required question set are locked in Auth and Calendar holds.
 
 ## In this repo (now)
 
