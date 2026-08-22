@@ -17,7 +17,8 @@
     "opam:deps": "opam install . --deps-only -y",
     "test:e2e": "node e2e/run.mjs",
     "test:e2e:only": "node e2e/navigation.mjs",
-    "test": "npm run elm:make && npm run test:e2e"
+    "test:t13": "node e2e/t13-crawlable.mjs",
+    "test": "npm run elm:make && npm run test:t13 && npm run test:e2e"
   },
   "dependencies": {
     "melange": "7.0.1"
