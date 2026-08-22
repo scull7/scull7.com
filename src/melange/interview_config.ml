@@ -52,6 +52,25 @@ let process_source name =
   | Some v when String.trim v <> "" -> Some (String.trim v)
   | _ -> netlify_source name
 
+let strip_wrap t =
+  let n = String.length t in
+  if
+    n >= 2
+    && ((t.[0] = '"' && t.[n - 1] = '"') || (t.[0] = '\'' && t.[n - 1] = '\''))
+  then String.sub t 1 (n - 2)
+  else t
+
+let sanitize_secret raw =
+  let t = strip_wrap (String.trim raw) in
+  let t =
+    if String.length t >= 7 && String.lowercase_ascii (String.sub t 0 7) = "bearer "
+    then String.trim (String.sub t 7 (String.length t - 7))
+    else t
+  in
+  t
+  |> Js.String.replaceByRe ~regexp:[%mel.re "/\\s+/g"] ~replacement:""
+  |> strip_wrap
+
 let default_blocklist =
   [ "gmail"; "yahoo"; "hotmail"; "outlook.com"; "icloud" ]
 
@@ -208,7 +227,10 @@ let of_source ?(source = process_source) () =
     magic_link_ttl_ms =
       parse_float 86400000. (source "INTERVIEW_MAGIC_LINK_TTL_MS");
     turso_url = source "TURSO_DATABASE_URL";
-    turso_token = source "TURSO_AUTH_TOKEN";
+    turso_token =
+      (match source "TURSO_AUTH_TOKEN" with
+      | Some v -> Some (sanitize_secret v)
+      | None -> None);
     resend_api_key =
       (match source "RESEND_API_KEY" with
       | Some v -> Some v

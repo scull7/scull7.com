@@ -529,6 +529,24 @@ let prove_http_ask_and_verify_request () =
   E2e_ffi.pass "HTTP ask and verify-request paths";
   return ()
 
+let prove_auth_token_is_sanitized () =
+  let cfg =
+    Interview_config.of_source
+      ~source:
+        (source
+           [
+             env "TURSO_DATABASE_URL" "https://interview-me.test.invalid";
+             env "TURSO_AUTH_TOKEN" "Bearer  eyJabc\nxyz ";
+           ])
+      ()
+  in
+  (match cfg.turso_token with
+  | Some t ->
+      E2e_ffi.assert_ (t = "eyJabcxyz") "strips Bearer, quotes, and whitespace"
+  | None -> failwith "expected sanitized TURSO_AUTH_TOKEN");
+  E2e_ffi.pass "Turso auth token is sanitized";
+  return ()
+
 let prove_production_store_is_turso () =
   let cfg =
     Interview_config.of_source
@@ -712,6 +730,7 @@ let run () =
   >>= (fun () -> prove_session_and_ask ())
   >>= (fun () -> prove_free_email ())
   >>= (fun () -> prove_http_ask_and_verify_request ())
+  >>= (fun () -> prove_auth_token_is_sanitized ())
   >>= (fun () -> prove_production_store_is_turso ())
   >>= (fun () -> prove_qa_without_verify_hold_refused ())
   >>= (fun () -> prove_hold_requires_questions ())
