@@ -3,7 +3,8 @@
  * resume.json fixtures. Playwright is not used — crawlers do not execute JS.
  *
  * Restores public/resume.json in `finally` after every fixture, including
- * failures and invalid JSON.
+ * failures and invalid JSON. Inspects `<main id="crawlable-resume">` (Ora
+ * ignores noscript).
  */
 import { spawn, spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -51,14 +52,45 @@ const BANNER_HIGHLIGHTS = [
 
 // --- calculations ----------------------------------------------------------
 
-function extractNoscriptInner(html) {
+function extractFragment(html) {
   const match = html.match(
-    /<noscript\s+id=["']crawlable-resume["']\s*>([\s\S]*?)<\/noscript>/i,
+    /<main\s+id=["']crawlable-resume["']\s*>([\s\S]*?)<\/main>/i,
   );
   if (!match) {
-    throw new Error('missing <noscript id="crawlable-resume"> in GET body');
+    throw new Error('missing <main id="crawlable-resume"> in GET body');
   }
   return match[1];
+}
+
+function withoutNoscript(html) {
+  return html.replace(/<noscript\b[\s\S]*?<\/noscript>/gi, "");
+}
+
+function visibleBodyText(html) {
+  const body = html.match(/<body[^>]*>([\s\S]*)<\/body>/i)?.[1] ?? html;
+  const stripped = withoutNoscript(body)
+    .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return stripped;
+}
+
+function assertNoJsDocument(html) {
+  const visible = withoutNoscript(html);
+  assert(/<h1\b[^>]*>[\s\S]*?<\/h1>/i.test(visible), "AC no-JS: H1 missing outside noscript");
+  assert(/<h2\b[^>]*>[\s\S]*?<\/h2>/i.test(visible), "AC no-JS: H2 missing outside noscript");
+  assert(/<h3\b[^>]*>[\s\S]*?<\/h3>/i.test(visible), "AC no-JS: H3 missing outside noscript");
+  assert(
+    !/<a\b[^>]*>[\s\S]*?<h[1-3]\b/i.test(visible),
+    "AC no-JS: heading trapped inside a link",
+  );
+  const text = visibleBodyText(html);
+  assert(
+    text.length >= 500,
+    `AC no-JS: need 500+ body chars outside noscript, got ${text.length}`,
+  );
 }
 
 function hrefs(fragment) {
@@ -151,12 +183,12 @@ function assert(cond, message) {
 }
 
 function assertAc1(fragment) {
-  assert(fragment.includes(PROD.name), "AC1: Nathan Sculli missing in noscript");
+  assert(fragment.includes(PROD.name), "AC1: Nathan Sculli missing in crawlable main");
   assert(
     fragment.includes(PROD.summary),
-    "AC1: summary sentence missing in noscript",
+    "AC1: summary sentence missing in crawlable main",
   );
-  assert(fragment.includes(PROD.employer), "AC1: TensorWave missing in noscript");
+  assert(fragment.includes(PROD.employer), "AC1: TensorWave missing in crawlable main");
   const urls = hrefs(fragment);
   assert(
     hasHref(urls, PROD.mailto) || hasHref(urls, PROD.crates),
@@ -184,10 +216,22 @@ function assertIdentityLock(html) {
   );
   const ld = personJsonLd(html);
   assert(ld.name === PROD.name, `JSON-LD name drifted: ${ld.name}`);
+  assert(
+    typeof ld.description === "string" && ld.description.length > 20,
+    `JSON-LD description missing: ${ld.description}`,
+  );
   assert(ld.jobTitle === PROD.jobTitle, `JSON-LD jobTitle drifted: ${ld.jobTitle}`);
   assert(
     ld.worksFor?.name === PROD.employer,
     `JSON-LD worksFor drifted: ${ld.worksFor?.name}`,
+  );
+  assert(
+    ld.worksFor?.contactPoint?.email === PROD.mailto.replace("mailto:", ""),
+    "JSON-LD Organization contactPoint.email missing",
+  );
+  assert(
+    ld.worksFor?.address?.addressLocality === "Las Vegas",
+    "JSON-LD Organization address missing",
   );
 }
 
@@ -425,8 +469,9 @@ async function withResumeRestored(label, fn) {
 
 async function proveAc1() {
   const html = await getHome();
-  assertAc1(extractNoscriptInner(html));
-  pass("AC1 HTTP GET / noscript (no JS)");
+  assertAc1(extractFragment(html));
+  assertNoJsDocument(html);
+  pass("AC1 HTTP GET / crawlable main (no JS)");
 }
 
 async function proveMutation(committed) {
@@ -435,7 +480,7 @@ async function proveMutation(committed) {
     injectDist();
     preview = await recyclePreview(preview);
     const html = await getHome();
-    assertMutation(extractNoscriptInner(html), html);
+    assertMutation(extractFragment(html), html);
   });
 }
 
@@ -445,7 +490,7 @@ async function proveEmptyUrl(committed) {
     injectDist();
     preview = await recyclePreview(preview);
     const html = await getHome();
-    assertEmptyUrl(extractNoscriptInner(html));
+    assertEmptyUrl(extractFragment(html));
   });
 }
 
@@ -455,7 +500,7 @@ async function proveMissingJob(committed) {
     injectDist();
     preview = await recyclePreview(preview);
     const html = await getHome();
-    assertMissingJob(extractNoscriptInner(html));
+    assertMissingJob(extractFragment(html));
   });
 }
 

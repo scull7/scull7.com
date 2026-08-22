@@ -1,7 +1,7 @@
-(* Pure: Resume_doc.t → crawlable HTML fragment. *)
+(* Pure: Resume_doc.t → crawlable HTML fragment and Markdown. *)
 
 let work_count = 3
-let noscript_id = "crawlable-resume"
+let fragment_id = "crawlable-resume"
 
 let split_paragraphs text =
   let lines = String.split_on_char '\n' text in
@@ -66,18 +66,23 @@ let render_highlights items =
   | [] -> ""
   | lis -> Html.wrap "ul" (String.concat "" lis)
 
-let render_heading (job : Resume_doc.job) =
+(* Headings stay plain text. Company URLs are sibling links so H2/H3 are
+   never trapped inside <a>. *)
+let render_heading (job : Resume_doc.job) = Html.el "h2" job.name
+
+let render_job_url (job : Resume_doc.job) =
   if Resume_doc.present job.url then
-    Html.wrap "h2" (Html.anchor job.url job.name)
-  else Html.el "h2" job.name
+    Html.wrap "p" (Html.anchor job.url (anchor_label job.url))
+  else ""
 
 let render_job (job : Resume_doc.job) =
   Html.wrap "section"
     (Html.join_lines
        [
          render_heading job;
-         Html.el "p" job.position;
+         Html.el "h3" job.position;
          render_dates job;
+         render_job_url job;
          render_highlights job.highlights;
        ])
 
@@ -94,20 +99,85 @@ let render_fragment (doc : Resume_doc.t) =
   let jobs = take work_count doc.work |> List.map render_job in
   Html.join_lines (render_basics doc.basics :: jobs)
 
-let wrap_noscript inner =
-  "<noscript id=\"" ^ noscript_id ^ "\">\n" ^ inner ^ "\n    </noscript>"
+let wrap_fragment inner =
+  "<main id=\"" ^ fragment_id ^ "\">\n" ^ inner ^ "\n    </main>"
+
+(* Backward-compatible alias used by older print callers / docs. *)
+let wrap_noscript = wrap_fragment
 
 let inject html inner =
-  let wrapped = wrap_noscript inner in
+  let wrapped = wrap_fragment inner in
+  let main_re =
+    [%mel.re
+      "/<main\\s+id=[\"']crawlable-resume[\"']\\s*>[\\s\\S]*?<\\/main>/i"]
+  in
   let noscript_re =
     [%mel.re
       "/<noscript\\s+id=[\"']crawlable-resume[\"']\\s*>[\\s\\S]*?<\\/noscript>/i"]
   in
   let body_re = [%mel.re "/<\\/body>/i"] in
-  if Js.Re.test ~str:html noscript_re then
+  if Js.Re.test ~str:html main_re then
+    Js.String.replaceByRe ~regexp:main_re ~replacement:wrapped html
+  else if Js.Re.test ~str:html noscript_re then
     Js.String.replaceByRe ~regexp:noscript_re ~replacement:wrapped html
   else if Js.Re.test ~str:html body_re then
     Js.String.replaceByRe ~regexp:body_re
       ~replacement:("    " ^ wrapped ^ "\n  </body>")
       html
   else html ^ "\n" ^ wrapped ^ "\n"
+
+(* --- Markdown (same facts as the HTML fragment) ------------------------- *)
+
+let md_escape text = text
+
+let md_heading level text =
+  if text = "" then "" else String.make level '#' ^ " " ^ md_escape text
+
+let md_para text = if text = "" then "" else md_escape text
+
+let md_link href label = "[" ^ md_escape label ^ "](" ^ href ^ ")"
+
+let render_md_contact basics =
+  let items =
+    contact_hrefs basics
+    |> List.map (fun href -> "- " ^ md_link href (anchor_label href))
+  in
+  if items = [] then "" else String.concat "\n" items
+
+let render_md_dates (job : Resume_doc.job) =
+  match (job.start_date, job.end_date) with
+  | "", "" -> ""
+  | start, "" -> start
+  | "", finish -> finish
+  | start, finish -> start ^ " - " ^ finish
+
+let render_md_job (job : Resume_doc.job) =
+  let highlights =
+    List.map (fun h -> "- " ^ md_escape h) job.highlights |> Html.nonempty
+  in
+  Html.join_lines
+    [
+      md_heading 2 job.name;
+      md_heading 3 job.position;
+      render_md_dates job;
+      (if Resume_doc.present job.url then md_link job.url job.url else "");
+      (if highlights = [] then "" else String.concat "\n" highlights);
+    ]
+
+let render_markdown (doc : Resume_doc.t) =
+  let basics = doc.basics in
+  let jobs = take work_count doc.work |> List.map render_md_job in
+  let summary = split_paragraphs basics.summary |> List.map md_para in
+  Html.join_lines
+    ([
+       md_heading 1 basics.name;
+       md_para basics.label;
+     ]
+    @ summary
+    @ [
+        md_heading 2 "Contact";
+        render_md_contact basics;
+        md_heading 2 "Experience";
+      ]
+    @ jobs
+    @ [ "" ])

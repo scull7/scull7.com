@@ -11,14 +11,15 @@
     "dev": "npm run melange && concurrently -k -n mel,vite -c magenta,cyan \"npm run melange:watch\" \"vite\"",
     "build": "npm run melange && vite build",
     "inject:resume": "node _build/default/src/melange/crawlable/src/melange/crawlable_cli.cjs",
-    "inject:resume:dist": "node _build/default/src/melange/crawlable/src/melange/crawlable_cli.cjs inject dist/index.html public/resume.json",
+    "inject:resume:dist": "node _build/default/src/melange/crawlable/src/melange/crawlable_cli.cjs inject dist/index.html public/resume.json && node _build/default/src/melange/crawlable/src/melange/crawlable_cli.cjs write-md dist/index.md public/resume.json",
     "preview": "vite preview",
     "opam:init": "opam switch create . 5.2.0 -y --no-install && opam install . --deps-only -y && npm install",
     "opam:deps": "opam install . --deps-only -y",
     "test:e2e": "node e2e/run.mjs",
     "test:e2e:only": "node e2e/navigation.mjs",
     "test:t13": "node e2e/t13-crawlable.mjs",
-    "test": "npm run elm:make && npm run test:t13 && npm run test:e2e"
+    "test:agentic": "node e2e/agentic.mjs",
+    "test": "npm run elm:make && npm run test:t13 && SKIP_BUILD=1 npm run test:agentic && SKIP_BUILD=1 npm run test:e2e"
   },
   "dependencies": {
     "melange": "7.0.1"

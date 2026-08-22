@@ -1,5 +1,5 @@
-(* Actions: read resume.json, write crawlable HTML. Calculations live in
-   Resume_doc / Crawlable. *)
+(* Actions: read resume.json, write crawlable HTML and Markdown. Calculations
+   live in Resume_doc / Crawlable. *)
 
 external read_utf8 : string -> string -> string = "readFileSync"
 [@@mel.module "fs"]
@@ -32,22 +32,34 @@ let parse_resume path =
 let fragment_from resume_path =
   parse_resume resume_path |> Crawlable.render_fragment
 
+let markdown_from resume_path =
+  parse_resume resume_path |> Crawlable.render_markdown
+
 let default_resume cwd = Node.Path.join2 cwd "public/resume.json"
 let default_html cwd = Node.Path.join2 cwd "dist/index.html"
+let default_md cwd = Node.Path.join2 cwd "dist/index.md"
 
 let print_fragment resume_path =
   let inner = fragment_from resume_path in
-  stdout_write (Crawlable.wrap_noscript inner ^ "\n")
+  stdout_write (Crawlable.wrap_fragment inner ^ "\n")
+
+let print_markdown resume_path =
+  stdout_write (markdown_from resume_path)
 
 let inject_file html_path resume_path =
   let inner = fragment_from resume_path in
   let html = read_file html_path in
   write_file html_path (Crawlable.inject html inner)
 
+let write_markdown md_path resume_path =
+  write_file md_path (markdown_from resume_path)
+
 let usage () =
   fail
     "usage: crawlable_cli.js [print] [resume.json]\n\
-     or:    crawlable_cli.js inject [dist/index.html] [public/resume.json]"
+     or:    crawlable_cli.js print-md [resume.json]\n\
+     or:    crawlable_cli.js inject [dist/index.html] [public/resume.json]\n\
+     or:    crawlable_cli.js write-md [dist/index.md] [public/resume.json]"
 
 let nth argv i = if Array.length argv > i then Some argv.(i) else None
 
@@ -62,6 +74,13 @@ let () =
         | None -> default_resume cwd
       in
       print_fragment resume
+  | Some "print-md" ->
+      let resume =
+        match nth argv 3 with
+        | Some path -> path
+        | None -> default_resume cwd
+      in
+      print_markdown resume
   | Some "inject" ->
       let html =
         match nth argv 3 with
@@ -74,4 +93,16 @@ let () =
         | None -> default_resume cwd
       in
       inject_file html resume
+  | Some "write-md" ->
+      let md =
+        match nth argv 3 with
+        | Some path -> path
+        | None -> default_md cwd
+      in
+      let resume =
+        match nth argv 4 with
+        | Some path -> path
+        | None -> default_resume cwd
+      in
+      write_markdown md resume
   | Some _ -> usage ()

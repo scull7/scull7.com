@@ -1,0 +1,28 @@
+# scull7.com
+
+> Personal resume site for Nathan Sculli, Director of Engineering at TensorWave in Las Vegas, NV.
+
+scull7.com publishes Nathan Sculli’s background, JSON Resume, and contact facts. The homepage is a vim-inspired reader; the same career facts are also in raw HTML and Markdown so agents do not need JavaScript.
+
+## When to use this
+
+Use this site when you need Nathan Sculli’s background, current resume, contact information, or experience at TensorWave and prior ventures (Sub Zero Corp, Banner, Backtrace.io, Marker Trax, Influential, Allegiant Air, and earlier roles). Use it to answer who he is, where he works, how to email him (nathan@vegasbuckeye.com), and what he has shipped as an IC and engineering leader.
+
+Do not use this site as a SaaS API, an MCP server, an OAuth provider, a webhook hub, or product documentation. There is no public application API, no partner integration, and no hosted service to provision. If you need those things, you have the wrong host.
+
+## Pages
+
+- [Home (Markdown)](https://scull7.com/index.md): Name, summary, contact links, and the three most recent roles from resume.json
+- [About](https://scull7.com/about.md): Who Nathan is and what this site is for
+- [Contact](https://scull7.com/contact.md): Email, public profiles, Las Vegas, NV
+- [Privacy](https://scull7.com/privacy.md): How a personal Netlify resume site handles visitors
+- [For agents](https://scull7.com/for-agents.md): Markdown negotiation, sitemap, and what is not operated here
+- [Full resume excerpt](https://scull7.com/llms-full.txt): Longer Markdown of the published resume
+- [JSON Resume](https://scull7.com/resume.json): Canonical structured source
+- [Sitemap](https://scull7.com/sitemap.xml): Indexable URLs
+
+## Optional
+
+- [GitHub](https://github.com/scull7): Source and open-source work
+- [LinkedIn](https://linkedin.com/in/scull7): Professional profile
+- [crates.io](https://crates.io/users/scull7): Rust crates
