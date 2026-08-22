@@ -6,3 +6,13 @@
  (preprocess
   (pps melange.ppx))
  (module_systems es6))
+
+(melange.emit
+ (target crawlable)
+ (alias site)
+ (modules html resume_doc crawlable crawlable_cli)
+ (libraries melange.js melange.node)
+ (preprocess
+  (pps melange.ppx))
+ (module_systems
+  (commonjs cjs)))
