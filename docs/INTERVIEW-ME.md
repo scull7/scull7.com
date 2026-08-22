@@ -160,6 +160,8 @@ None remaining from the 2026-08-22 list. Hold length, calendar, storage, the fre
 
 This note is the durable v1 spec. Implementation is T-15 (Melange Netlify function, Turso, cited Q&A, magic-link verify, tentative GCal hold). Locked decisions stay locked.
 
+Netlify deploy: `emit_artifacts` esbuild-bundles the interview function so Lambda does not import `melange.js` as a package (the edge negotiate re-export is fine on Deno). `netlify.toml` rewrites `/openapi.json`, `/mcp`, and `/interview/*` onto `/.netlify/functions/interview` and keeps those pretty paths in `config.path`.
+
 ## Environment
 
 Do not commit secrets. Config fails closed when a required secret is missing (HTTP 503 `missing_env` + the variable name).

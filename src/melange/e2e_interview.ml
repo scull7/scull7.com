@@ -432,7 +432,89 @@ let prove_openapi_mcp () =
     (response_status http_start = 201)
     ("POST /interview/sessions "
     ^ string_of_int (response_status http_start));
+  Interview_http.handle deps
+    (req "POST" "/interview/sessions" (start_body ~email:"pat@gmail.com" ()))
+  >>= fun gmail_res ->
+  E2e_ffi.assert_
+    (response_status gmail_res = 400 || response_status gmail_res = 422)
+    "POST /interview/sessions rejects gmail";
+  json_body gmail_res >>= fun (gmail_text, _) ->
+  E2e_ffi.assert_
+    (Js.String.includes ~search:"gmail" (String.lowercase_ascii gmail_text)
+    || Js.String.includes ~search:"free" (String.lowercase_ascii gmail_text))
+    "gmail rejection names the free-email problem";
+  Interview_http.handle deps (req "GET" "/interview/resume" "")
+  >>= fun resume_res ->
+  E2e_ffi.assert_ (response_status resume_res = 200) "GET /interview/resume";
+  response_text resume_res >>= fun resume_text ->
+  E2e_ffi.assert_
+    (Js.String.includes ~search:"TensorWave" resume_text
+    || Js.String.includes ~search:"basics" resume_text
+    || Js.String.includes ~search:"work" resume_text)
+    "resume surface has published facts";
+  Interview_http.handle deps
+    (req "GET" "/.netlify/functions/interview/openapi.json" "")
+  >>= fun mounted_oa ->
+  E2e_ffi.assert_
+    (response_status mounted_oa = 200)
+    "function-mount GET /openapi.json";
+  Interview_http.handle deps
+    (req "GET" "/.netlify/functions/interview/interview/resume" "")
+  >>= fun mounted_resume ->
+  E2e_ffi.assert_
+    (response_status mounted_resume = 200)
+    "function-mount GET /interview/resume";
+  Interview_http.handle deps
+    (req "POST" "/.netlify/functions/interview/interview/sessions"
+       (start_body ~email:"second@acme.example" ()))
+  >>= fun mounted_start ->
+  E2e_ffi.assert_
+    (response_status mounted_start = 201)
+    "function-mount POST /interview/sessions";
   E2e_ffi.pass "OpenAPI and MCP surfaces exist";
+  return ()
+
+let prove_function_bundle () =
+  let interview_js =
+    Node.Path.join [| E2e_ffi.root; "netlify/functions/interview.js" |]
+  in
+  E2e_ffi.assert_
+    (Node.Fs.existsSync interview_js)
+    "bundled netlify/functions/interview.js exists";
+  let body = Node.Fs.readFileAsUtf8Sync interview_js in
+  List.iter
+    (fun needle ->
+      E2e_ffi.assert_
+        (not (Js.String.includes ~search:needle body))
+        ("bundle must not import " ^ needle))
+    [
+      "from \"melange.js";
+      "from 'melange.js";
+      "from \"melange/";
+      "from 'melange/";
+    ];
+  E2e_ffi.assert_ (Js.String.includes ~search:"export" body) "bundle exports";
+  E2e_ffi.assert_ (Js.String.includes ~search:"config" body) "bundle has config";
+  E2e_ffi.assert_
+    (Js.String.includes ~search:"/.netlify/functions/interview" body)
+    "config keeps the default function URL";
+  let toml =
+    Node.Fs.readFileAsUtf8Sync
+      (Node.Path.join [| E2e_ffi.root; "netlify.toml" |])
+  in
+  E2e_ffi.assert_
+    (Js.String.includes ~search:"[[redirects]]" toml)
+    "netlify.toml has redirects";
+  E2e_ffi.assert_
+    (Js.String.includes ~search:"/.netlify/functions/interview" toml)
+    "pretty paths rewrite to the interview function";
+  E2e_ffi.assert_
+    (Js.String.includes ~search:"/openapi.json" toml)
+    "openapi.json rewrite is present";
+  E2e_ffi.assert_
+    (Js.String.includes ~search:"included_files" toml)
+    "function bundle includes published corpus files";
+  E2e_ffi.pass "interview function is a self-contained Netlify bundle";
   return ()
 
 let prove_refuse_does_not_complete () =
@@ -469,7 +551,8 @@ let run () =
     E2e_ffi.set_exit_code code;
     E2e_ffi.schedule_exit ()
   in
-  prove_session_and_ask ()
+  prove_function_bundle ()
+  >>= (fun () -> prove_session_and_ask ())
   >>= (fun () -> prove_free_email ())
   >>= (fun () -> prove_qa_without_verify_hold_refused ())
   >>= (fun () -> prove_hold_requires_questions ())

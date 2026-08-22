@@ -1,4 +1,5 @@
-(* Netlify function entry for interview-me. Melange emit; wrapper is generated. *)
+(* Netlify function entry for interview-me. Melange emit; emit_artifacts
+   esbuild-bundles this module so Lambda does not import `melange.js`. *)
 
 type request = Interview_http.request
 type context
@@ -18,36 +19,84 @@ let first_file candidates =
   in
   loop candidates
 
-let load_corpus root =
-  let resume_json =
-    match
-      first_file
-        [
-          Node.Path.join [| root; "public/resume.json" |];
-          Node.Path.join [| root; "dist/resume.json" |];
-          Node.Path.join [| root; "resume.json" |];
-        ]
-    with
-    | None -> Interview_json.obj []
+let page_names = [ "about.md"; "contact.md"; "llms-full.txt"; "llms.txt" ]
+
+let resume_candidates root =
+  [
+    Node.Path.join [| root; "public/resume.json" |];
+    Node.Path.join [| root; "dist/resume.json" |];
+    Node.Path.join [| root; "resume.json" |];
+    Node.Path.join [| root; "netlify/functions/_corpus/resume.json" |];
+    Node.Path.join [| root; "_corpus/resume.json" |];
+  ]
+
+let page_candidates root name =
+  [
+    Node.Path.join [| root; "public"; name |];
+    Node.Path.join [| root; "dist"; name |];
+    Node.Path.join [| root; "netlify/functions/_corpus"; name |];
+    Node.Path.join [| root; "_corpus"; name |];
+  ]
+
+let load_corpus_disk root =
+  let resume =
+    match first_file (resume_candidates root) with
+    | None -> None
     | Some (_, body) -> (
-        try Interview_json.json_parse body with _ -> Interview_json.obj [])
+        try Some (Interview_json.json_parse body) with _ -> None)
   in
   let page name =
-    match
-      first_file
-        [
-          Node.Path.join [| root; "public"; name |];
-          Node.Path.join [| root; "dist"; name |];
-        ]
-    with
+    match first_file (page_candidates root name) with
     | None -> None
     | Some (_, body) -> Some ("/" ^ name, body)
   in
-  let pages =
-    [ "about.md"; "contact.md"; "llms-full.txt"; "llms.txt" ]
-    |> List.filter_map page
-  in
-  Interview_corpus.of_pages ~resume_json pages
+  let pages = page_names |> List.filter_map page in
+  (resume, pages)
+
+let fetch_text origin path =
+  let headers = Js.Dict.empty () in
+  Interview_http_fetch.get (origin ^ path) ~headers
+  |> Js.Promise.then_ (fun res ->
+         if Interview_http_fetch.response_ok res then
+           Interview_http_fetch.response_text res
+           |> Js.Promise.then_ (fun body ->
+                  Js.Promise.resolve
+                    (if String.trim body = "" then None else Some body))
+         else Js.Promise.resolve None)
+  |> Js.Promise.catch (fun _ -> Js.Promise.resolve None)
+
+let rec fetch_pages origin acc = function
+  | [] -> Js.Promise.resolve (List.rev acc)
+  | name :: rest ->
+      fetch_text origin ("/" ^ name)
+      |> Js.Promise.then_ (fun body ->
+             let acc =
+               match body with
+               | None -> acc
+               | Some t -> ("/" ^ name, t) :: acc
+             in
+             fetch_pages origin acc rest)
+
+let load_corpus origin root =
+  let resume, pages = load_corpus_disk root in
+  match resume with
+  | Some resume_json ->
+      Js.Promise.resolve (Interview_corpus.of_pages ~resume_json pages)
+  | None ->
+      fetch_text origin "/resume.json"
+      |> Js.Promise.then_ (fun resume_body ->
+             (if pages = [] then fetch_pages origin [] page_names
+              else Js.Promise.resolve pages)
+             |> Js.Promise.then_ (fun pages ->
+                    let resume_json =
+                      match resume_body with
+                      | None -> Interview_json.obj []
+                      | Some body -> (
+                          try Interview_json.json_parse body
+                          with _ -> Interview_json.obj [])
+                    in
+                    Js.Promise.resolve
+                      (Interview_corpus.of_pages ~resume_json pages)))
 
 let origin_of request context (cfg : Interview_config.t) =
   match Js.Undefined.toOption (context_site context)##url with
@@ -67,35 +116,53 @@ let origin_of request context (cfg : Interview_config.t) =
           | Some o -> o
           | None -> cfg.site_url))
 
+let fail_res exn =
+  Interview_http.respond 500 "application/json; charset=utf-8"
+    (Interview_json.pretty
+       (Interview_json.obj
+          [
+            ("error", Interview_json.str "internal");
+            ("message", Interview_json.str (Printexc.to_string exn));
+          ]))
+    []
+
 let deps_for request context =
   let cfg0 = Interview_config.load () in
   let site_url = origin_of request context cfg0 in
   let cfg = { cfg0 with site_url } in
-  {
-    Interview_service.now_ms = Interview_crypto.now_ms;
-    random_id = Interview_crypto.random_id;
-    cfg;
-    store = Interview_store.of_config cfg;
-    corpus = load_corpus (Node.Process.cwd ());
-    mail = Interview_mail.of_config cfg;
-    calendar = Interview_calendar.of_config cfg;
-    webhook = Interview_service.http_webhook ();
-  }
+  load_corpus site_url (Node.Process.cwd ())
+  |> Js.Promise.then_ (fun corpus ->
+         Js.Promise.resolve
+           {
+             Interview_service.now_ms = Interview_crypto.now_ms;
+             random_id = Interview_crypto.random_id;
+             cfg;
+             store = Interview_store.of_config cfg;
+             corpus;
+             mail = Interview_mail.of_config cfg;
+             calendar = Interview_calendar.of_config cfg;
+             webhook = Interview_service.http_webhook ();
+           })
 
 let config =
   [%mel.obj
-    { path = [| "/openapi.json"; "/mcp"; "/interview"; "/interview/*" |] }]
+    {
+      path =
+        [|
+          "/openapi.json";
+          "/mcp";
+          "/interview";
+          "/interview/*";
+          "/.netlify/functions/interview";
+          "/.netlify/functions/interview/*";
+        |];
+    }]
 
 let default =
   fun [@u] request context ->
-    try Interview_http.handle (deps_for request context) request
-    with exn ->
-      Js.Promise.resolve
-        (Interview_http.respond 500 "application/json; charset=utf-8"
-           (Interview_json.pretty
-              (Interview_json.obj
-                 [
-                   ("error", Interview_json.str "internal");
-                   ("message", Interview_json.str (Printexc.to_string exn));
-                 ]))
-           [])
+    (try
+       deps_for request context
+       |> Js.Promise.then_ (fun deps -> Interview_http.handle deps request)
+     with exn -> Js.Promise.resolve (fail_res exn))
+    |> Js.Promise.catch (fun _ ->
+           Js.Promise.resolve (fail_res (Failure "function failed")))

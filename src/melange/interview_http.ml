@@ -494,8 +494,19 @@ let handle_mcp deps req =
       return
         (json_ok (mcp_error id (-32601) ("Unknown method: " ^ other) None))
 
+let function_mount = "/.netlify/functions/interview"
+
+let canonical_pathname pathname =
+  if pathname = function_mount || pathname = function_mount ^ "/" then
+    pathname
+  else if String.starts_with ~prefix:(function_mount ^ "/") pathname then
+    String.sub pathname
+      (String.length function_mount)
+      (String.length pathname - String.length function_mount)
+  else pathname
+
 let handle_rest deps req url =
-  let path = url_pathname url in
+  let path = canonical_pathname (url_pathname url) in
   let meth = request_method req in
   if meth = "OPTIONS" then
     return (respond 204 "text/plain; charset=utf-8" "" [])

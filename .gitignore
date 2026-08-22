@@ -4,6 +4,7 @@ netlify/edge-functions/negotiate.js
 netlify/edge-functions/_melange/
 netlify/functions/interview.js
 netlify/functions/_melange/
+netlify/functions/_corpus/
 .vite/
 elm-stuff/
 lib/

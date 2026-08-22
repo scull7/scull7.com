@@ -61,9 +61,40 @@
     Access-Control-Allow-Methods = "GET,POST,OPTIONS"
     Access-Control-Allow-Headers = "Content-Type, Authorization"
 
+[[redirects]]
+  from = "/openapi.json"
+  to = "/.netlify/functions/interview/openapi.json"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/mcp"
+  to = "/.netlify/functions/interview/mcp"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/interview"
+  to = "/.netlify/functions/interview/interview"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/interview/*"
+  to = "/.netlify/functions/interview/interview/:splat"
+  status = 200
+  force = true
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+  included_files = [
+    "public/resume.json",
+    "public/*.md",
+    "public/llms.txt",
+    "public/llms-full.txt",
+    "netlify/functions/_corpus/**"
+  ]
 
 [[edge_functions]]
   function = "negotiate"
