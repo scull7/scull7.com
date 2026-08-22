@@ -116,13 +116,24 @@ let origin_of request context (cfg : Interview_config.t) =
           | Some o -> o
           | None -> cfg.site_url))
 
+external js_message : 'a -> string Js.undefined = "message" [@@mel.get]
+
+let fail_message exn =
+  let ocaml = Printexc.to_string exn in
+  if ocaml <> "Failure" && not (String.starts_with ~prefix:"Failure" ocaml)
+  then ocaml
+  else
+    match Js.Undefined.toOption (js_message exn) with
+    | Some m when String.trim m <> "" -> m
+    | _ -> ocaml
+
 let fail_res exn =
   Interview_http.respond 500 "application/json; charset=utf-8"
     (Interview_json.pretty
        (Interview_json.obj
           [
             ("error", Interview_json.str "internal");
-            ("message", Interview_json.str (Printexc.to_string exn));
+            ("message", Interview_json.str (fail_message exn));
           ]))
     []
 
@@ -164,5 +175,10 @@ let default =
        deps_for request context
        |> Js.Promise.then_ (fun deps -> Interview_http.handle deps request)
      with exn -> Js.Promise.resolve (fail_res exn))
-    |> Js.Promise.catch (fun _ ->
-           Js.Promise.resolve (fail_res (Failure "function failed")))
+    |> Js.Promise.catch (fun err ->
+           let message =
+             match Js.Undefined.toOption (js_message err) with
+             | Some m when String.trim m <> "" -> m
+             | _ -> "function failed"
+           in
+           Js.Promise.resolve (fail_res (Failure message)))

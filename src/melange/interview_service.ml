@@ -12,6 +12,7 @@ type error =
   | Hold_cap of int
   | Calendar of string
   | Mail of string
+  | Store of string
 
 type start_input = {
   company : string;
@@ -59,6 +60,15 @@ let ( >>= ) p f = Js.Promise.then_ f p
 let return x = Js.Promise.resolve x
 let ok x = return (Ok x)
 let err e = return (Error e)
+
+external js_message : 'a -> string Js.undefined = "message" [@@mel.get]
+
+let exn_message err =
+  match Js.Undefined.toOption (js_message err) with
+  | Some m when String.trim m <> "" -> m
+  | _ -> "store failed"
+
+let catch_store p = p |> Js.Promise.catch (fun e -> err (Store (exn_message e)))
 
 let escape_html s =
   s
@@ -151,28 +161,29 @@ let start (deps : deps) (input : start_input) =
         err (Free_email (Interview_config.email_domain email))
       else
         let domain = Interview_config.email_domain email in
-        deps.store.is_banned "address" email >>= fun addr_ban ->
-        deps.store.is_banned "domain" domain >>= fun domain_ban ->
-        if addr_ban then err (Banned email)
-        else if domain_ban then err (Banned domain)
-        else
-          let now = Interview_crypto.iso_of_ms (deps.now_ms ()) in
-          let session : Interview_store.session =
-            {
-              id = "ses_" ^ deps.random_id ();
-              company;
-              role;
-              recruiter_name = recruiter;
-              work_email = email;
-              work_domain = domain;
-              callback_url = input.callback_url;
-              hiring_timeline = None;
-              completed = [];
-              verified = false;
-              created_at = now;
-            }
-          in
-          deps.store.put_session session >>= fun () -> ok session
+        catch_store
+          (deps.store.is_banned "address" email >>= fun addr_ban ->
+           deps.store.is_banned "domain" domain >>= fun domain_ban ->
+           if addr_ban then err (Banned email)
+           else if domain_ban then err (Banned domain)
+           else
+             let now = Interview_crypto.iso_of_ms (deps.now_ms ()) in
+             let session : Interview_store.session =
+               {
+                 id = "ses_" ^ deps.random_id ();
+                 company;
+                 role;
+                 recruiter_name = recruiter;
+                 work_email = email;
+                 work_domain = domain;
+                 callback_url = input.callback_url;
+                 hiring_timeline = None;
+                 completed = [];
+                 verified = false;
+                 created_at = now;
+               }
+             in
+             deps.store.put_session session >>= fun () -> ok session)
 
 let ask (deps : deps) ~session_id ~question =
   match Interview_config.missing_store deps.cfg with
@@ -181,7 +192,8 @@ let ask (deps : deps) ~session_id ~question =
       let q = String.trim question in
       if q = "" then err (Invalid "question is required")
       else
-        deps.store.get_session session_id >>= function
+        catch_store
+        (deps.store.get_session session_id >>= function
         | None -> err Not_found
         | Some session ->
             let hit = Interview_corpus.ask deps.cfg deps.corpus q in
@@ -233,7 +245,7 @@ let ask (deps : deps) ~session_id ~question =
                   | _ -> hit.completed);
                 required_progress = session.completed;
                 required_remaining = remaining_ids;
-              }
+              })
 
 type verify_request_output = { session_id : string }
 
@@ -244,7 +256,8 @@ let request_verification (deps : deps) ~session_id =
       match Interview_config.missing_magic_secret deps.cfg with
       | Some name -> err (Missing_env name)
       | None ->
-          deps.store.get_session session_id >>= function
+          catch_store
+          (deps.store.get_session session_id >>= function
           | None -> err Not_found
           | Some session ->
               let secret = Option.get deps.cfg.magic_link_secret in
@@ -291,7 +304,7 @@ let request_verification (deps : deps) ~session_id =
                 }
               >>= function
               | Error msg -> err (Mail msg)
-              | Ok _ -> ok { session_id = session.id })
+              | Ok _ -> ok { session_id = session.id }))
 
 type verify_output = {
   session_id : string;
@@ -606,6 +619,7 @@ let error_code = function
   | Hold_cap _ -> 409
   | Calendar _ -> 502
   | Mail _ -> 502
+  | Store _ -> 502
 
 let error_json = function
   | Missing_env name ->
@@ -664,5 +678,11 @@ let error_json = function
       Interview_json.obj
         [
           ("error", Interview_json.str "mail");
+          ("message", Interview_json.str msg);
+        ]
+  | Store msg ->
+      Interview_json.obj
+        [
+          ("error", Interview_json.str "store");
           ("message", Interview_json.str msg);
         ]

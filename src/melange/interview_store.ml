@@ -296,6 +296,28 @@ let token_of_row = function
         created_at = "";
       }
 
+let clip_body body =
+  let t = String.trim body in
+  if String.length t <= 300 then t else String.sub t 0 297 ^ "..."
+
+let pipeline_error json =
+  match Interview_json.as_object json with
+  | None -> None
+  | Some root ->
+      let results = Interview_json.as_array (Interview_json.field root "results") in
+      let rec loop i =
+        if i >= Array.length results then None
+        else
+          match Interview_json.as_object results.(i) with
+          | Some item
+            when Interview_json.string_field item "type" = "error" ->
+              let e = Interview_json.object_field item "error" in
+              let msg = Interview_json.string_field e "message" in
+              Some (if msg = "" then "pipeline error" else msg)
+          | _ -> loop (i + 1)
+      in
+      loop 0
+
 let turso ~url ~token () : t =
   let endpoint = http_url url ^ "/v2/pipeline" in
   let ready = ref false in
@@ -307,13 +329,17 @@ let turso ~url ~token () : t =
       ~body:(Interview_json.json_stringify (pipeline_body stmts))
     >>= fun res ->
     Interview_http_fetch.response_text res >>= fun body ->
+    let status = Interview_http_fetch.response_status res in
     if not (Interview_http_fetch.response_ok res) then
       Js.Promise.reject
-        (Failure
-           ("turso "
-           ^ string_of_int (Interview_http_fetch.response_status res)
-           ^ ": " ^ body))
-    else return (Interview_json.json_parse body)
+        (Failure ("turso " ^ string_of_int status ^ ": " ^ clip_body body))
+    else
+      let json =
+        try Interview_json.json_parse body with _ -> Interview_json.null
+      in
+      match pipeline_error json with
+      | Some msg -> Js.Promise.reject (Failure ("turso: " ^ msg))
+      | None -> return json
   in
   let ensure () =
     if !ready then return ()
