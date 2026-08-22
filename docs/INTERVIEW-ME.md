@@ -183,7 +183,7 @@ Do not commit secrets. Config fails closed when a required secret is missing (HT
 | `GOOGLE_SERVICE_ACCOUNT_JSON` or `GOOGLE_CLIENT_EMAIL` + `GOOGLE_PRIVATE_KEY` | Alternate Calendar auth | Used if OAuth refresh is unset. |
 | `INTERVIEW_SITE_URL` | Public origin for magic/ban links | `https://scull7.com` (deploy uses the request/site URL when present) |
 
-Sessions, tokens, and holds use Turso via `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` only. No other store backend. If either variable is missing, session/verify/hold operations fail closed. `/openapi.json` and MCP `initialize` / `tools/list` still load.
+Sessions, tokens, and holds use Turso via `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` only. No other store backend. `INTERVIEW_STORE=memory` is not a production switch — deploy-preview and production fail closed to Turso. If either Turso variable is missing, session/verify/hold operations fail closed. `/openapi.json` and MCP `initialize` / `tools/list` still load.
 
 ## Later
 

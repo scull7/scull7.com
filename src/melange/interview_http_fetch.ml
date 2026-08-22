@@ -26,3 +26,6 @@ let post url ~headers ~body =
 
 let get url ~headers =
   fetch url (fetch_init ~method_:"GET" ~headers ~body:"")
+
+let delete url ~headers =
+  fetch url (fetch_init ~method_:"DELETE" ~headers ~body:"")

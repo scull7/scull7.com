@@ -1,5 +1,6 @@
-(* Session / token / hold persistence. Production is Turso (libSQL HTTP).
-   Tests may inject the memory backend via INTERVIEW_STORE=memory. *)
+(* Session / token / hold persistence. Production and deploy-preview are Turso
+   (libSQL HTTP) only. Tests inject Memory.bind in-process; of_config never
+   honors an INTERVIEW_STORE=memory switch. *)
 
 type session = {
   id : string;
@@ -505,9 +506,7 @@ let unavailable name : t =
   }
 
 let of_config (cfg : Interview_config.t) =
-  if cfg.store_memory then Memory.bind (Memory.create ())
-  else
-    match (cfg.turso_url, cfg.turso_token) with
-    | Some url, Some tok -> turso ~url ~token:tok ()
-    | None, _ -> unavailable "TURSO_DATABASE_URL"
-    | _, None -> unavailable "TURSO_AUTH_TOKEN"
+  match (cfg.turso_url, cfg.turso_token) with
+  | Some url, Some tok -> turso ~url ~token:tok ()
+  | None, _ -> unavailable "TURSO_DATABASE_URL"
+  | _, None -> unavailable "TURSO_AUTH_TOKEN"

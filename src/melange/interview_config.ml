@@ -31,7 +31,6 @@ type t = {
   google_service_account_json : string option;
   google_client_email : string option;
   google_private_key : string option;
-  store_memory : bool;
 }
 
 type source = string -> string option
@@ -219,21 +218,15 @@ let of_source ?(source = process_source) () =
     google_service_account_json = source "GOOGLE_SERVICE_ACCOUNT_JSON";
     google_client_email = source "GOOGLE_CLIENT_EMAIL";
     google_private_key = source "GOOGLE_PRIVATE_KEY";
-    store_memory =
-      match source "INTERVIEW_STORE" with
-      | Some "memory" -> true
-      | _ -> false;
   }
 
 let load () = of_source ()
 
 let missing_store cfg =
-  if cfg.store_memory then None
-  else
-    match (cfg.turso_url, cfg.turso_token) with
-    | Some _, Some _ -> None
-    | None, _ -> Some "TURSO_DATABASE_URL"
-    | _, None -> Some "TURSO_AUTH_TOKEN"
+  match (cfg.turso_url, cfg.turso_token) with
+  | Some _, Some _ -> None
+  | None, _ -> Some "TURSO_DATABASE_URL"
+  | _, None -> Some "TURSO_AUTH_TOKEN"
 
 let missing_magic_secret cfg =
   match cfg.magic_link_secret with

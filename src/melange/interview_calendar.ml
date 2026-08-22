@@ -16,6 +16,10 @@ type created = {
 
 type t = {
   create_tentative : hold_request -> (created, string) result Js.Promise.t;
+  delete_event :
+    calendar_id:string ->
+    event_id:string ->
+    (unit, string) result Js.Promise.t;
 }
 
 let ( >>= ) p f = Js.Promise.then_ f p
@@ -36,6 +40,13 @@ let capture () =
           in
           created := (req, rec_) :: !created;
           return (Ok rec_));
+      delete_event =
+        (fun ~calendar_id:_ ~event_id ->
+          created :=
+            List.filter
+              (fun (_, rec_) -> rec_.event_id <> event_id)
+              !created;
+          return (Ok ()));
     },
     created )
 
@@ -158,6 +169,24 @@ let access_token cfg =
       (Error
          "missing_env:GOOGLE_OAUTH_REFRESH_TOKEN (or GOOGLE_SERVICE_ACCOUNT_JSON)")
 
+let delete_event_http token calendar_id event_id =
+  let headers = Js.Dict.empty () in
+  Js.Dict.set headers "Authorization" ("Bearer " ^ token);
+  let cal = Interview_crypto.encode_uri calendar_id in
+  let ev = Interview_crypto.encode_uri event_id in
+  let url =
+    "https://www.googleapis.com/calendar/v3/calendars/" ^ cal ^ "/events/" ^ ev
+  in
+  Interview_http_fetch.delete url ~headers >>= fun res ->
+  Interview_http_fetch.response_text res >>= fun text ->
+  if Interview_http_fetch.response_ok res then return (Ok ())
+  else
+    return
+      (Error
+         ("gcal delete "
+         ^ string_of_int (Interview_http_fetch.response_status res)
+         ^ ": " ^ text))
+
 let create_event token (req : hold_request) =
   let headers = Js.Dict.empty () in
   Js.Dict.set headers "Authorization" ("Bearer " ^ token);
@@ -210,6 +239,11 @@ let google cfg =
         access_token cfg >>= function
         | Error e -> return (Error e)
         | Ok token -> create_event token req);
+    delete_event =
+      (fun ~calendar_id ~event_id ->
+        access_token cfg >>= function
+        | Error e -> return (Error e)
+        | Ok token -> delete_event_http token calendar_id event_id);
   }
 
 let of_config (cfg : Interview_config.t) =
@@ -225,4 +259,5 @@ let of_config (cfg : Interview_config.t) =
             (Error
                "missing_env:GOOGLE_OAUTH_REFRESH_TOKEN (or \
                 GOOGLE_SERVICE_ACCOUNT_JSON)"));
+      delete_event = (fun ~calendar_id:_ ~event_id:_ -> return (Ok ()));
     }

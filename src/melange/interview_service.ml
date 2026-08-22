@@ -478,8 +478,6 @@ let create_hold (deps : deps) ~start ~end_ ~book_token =
                                 created_at = now_iso;
                               }
                             in
-                            deps.store.put_hold hold >>= fun () ->
-                            deps.store.consume_token book.token >>= fun () ->
                             let secret = Option.get deps.cfg.magic_link_secret in
                             let ban_addr_raw = deps.random_id () in
                             let ban_dom_raw = deps.random_id () in
@@ -487,26 +485,6 @@ let create_hold (deps : deps) ~start ~end_ ~book_token =
                               Interview_crypto.iso_of_ms
                                 (deps.now_ms () +. (30. *. 86400000.))
                             in
-                            deps.store.put_token
-                              {
-                                token = ban_addr_raw;
-                                kind = "ban_address";
-                                session_id = session.id;
-                                expires_at = exp;
-                                consumed = false;
-                                created_at = now_iso;
-                              }
-                            >>= fun () ->
-                            deps.store.put_token
-                              {
-                                token = ban_dom_raw;
-                                kind = "ban_domain";
-                                session_id = session.id;
-                                expires_at = exp;
-                                consumed = false;
-                                created_at = now_iso;
-                              }
-                            >>= fun () ->
                             let ban_address_url =
                               deps.cfg.site_url ^ "/interview/ban?kind=address&token="
                               ^ Interview_crypto.encode_uri
@@ -517,12 +495,41 @@ let create_hold (deps : deps) ~start ~end_ ~book_token =
                               ^ Interview_crypto.encode_uri
                                   (Interview_crypto.sign_token secret ban_dom_raw)
                             in
+                            let cancel_created () =
+                              deps.calendar.delete_event
+                                ~calendar_id:created.calendar_id
+                                ~event_id:created.event_id
+                              >>= fun _ -> return ()
+                            in
                             hold_notification deps session hold ban_address_url
                               ban_domain_url
                             >>= fun mail_res ->
-                            (match mail_res with
-                            | Error msg -> err (Mail msg)
+                            match mail_res with
+                            | Error msg ->
+                                cancel_created () >>= fun () -> err (Mail msg)
                             | Ok _ ->
+                                deps.store.put_hold hold >>= fun () ->
+                                deps.store.consume_token book.token >>= fun () ->
+                                deps.store.put_token
+                                  {
+                                    token = ban_addr_raw;
+                                    kind = "ban_address";
+                                    session_id = session.id;
+                                    expires_at = exp;
+                                    consumed = false;
+                                    created_at = now_iso;
+                                  }
+                                >>= fun () ->
+                                deps.store.put_token
+                                  {
+                                    token = ban_dom_raw;
+                                    kind = "ban_domain";
+                                    session_id = session.id;
+                                    expires_at = exp;
+                                    consumed = false;
+                                    created_at = now_iso;
+                                  }
+                                >>= fun () ->
                                 (match session.callback_url with
                                 | None -> return ()
                                 | Some _ ->
@@ -545,7 +552,7 @@ let create_hold (deps : deps) ~start ~end_ ~book_token =
                                     calendar_id = created.calendar_id;
                                     calendar_event_id = created.event_id;
                                     html_link = created.html_link;
-                                  })
+                                  }
 
 let ban (deps : deps) ~kind ~signed =
   match deps.cfg.magic_link_secret with

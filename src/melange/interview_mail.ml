@@ -23,6 +23,9 @@ let capture () =
     },
     sent )
 
+let failing ?(message = "mail failed") () =
+  { send = (fun _ -> return (Error message)) }
+
 let resend api_key =
   {
     send =

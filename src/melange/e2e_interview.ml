@@ -35,8 +35,9 @@ let test_cfg extras =
       (source
          (extras
          @ [
-             env "INTERVIEW_STORE" "memory";
              env "INTERVIEW_MAGIC_LINK_SECRET" "test-secret-interview-me";
+             env "TURSO_DATABASE_URL" "https://interview-me.test.invalid";
+             env "TURSO_AUTH_TOKEN" "test-turso-token";
              env "INTERVIEW_SITE_URL" "https://scull7.com";
              env "INTERVIEW_CALENDAR_ID" "scull7.com";
              env "INTERVIEW_HOLD_CAP" "3";
@@ -474,6 +475,162 @@ let prove_openapi_mcp () =
   E2e_ffi.pass "OpenAPI and MCP surfaces exist";
   return ()
 
+let prove_http_ask_and_verify_request () =
+  let deps, sent, _, _ = make_deps () in
+  Interview_http.handle deps (req "POST" "/interview/sessions" (start_body ()))
+  >>= fun start_res ->
+  E2e_ffi.assert_
+    (response_status start_res = 201)
+    "HTTP POST /interview/sessions";
+  json_body start_res >>= fun (_, obj) ->
+  let id =
+    match obj with
+    | None -> failwith "start session body"
+    | Some dict -> Interview_json.string_field dict "id"
+  in
+  E2e_ffi.assert_ (String.starts_with ~prefix:"ses_" id) "session id";
+  let ask_body =
+    Interview_json.json_stringify
+      (Interview_json.obj
+         [
+           ( "question",
+             Interview_json.str "What is Nathan doing at TensorWave on Relay?"
+           );
+         ])
+  in
+  Interview_http.handle deps
+    (req "POST" ("/interview/sessions/" ^ id ^ "/ask") ask_body)
+  >>= fun ask_res ->
+  E2e_ffi.assert_
+    (response_status ask_res = 200)
+    ("HTTP POST /interview/sessions/:id/ask "
+    ^ string_of_int (response_status ask_res));
+  response_text ask_res >>= fun ask_text ->
+  E2e_ffi.assert_
+    (Js.String.includes ~search:"TensorWave" ask_text
+    || Js.String.includes ~search:"Relay" ask_text)
+    "HTTP ask returns a cited answer";
+  Interview_http.handle deps
+    (req "POST" ("/interview/sessions/" ^ id ^ "/verify-request") "")
+  >>= fun vr ->
+  E2e_ffi.assert_
+    (response_status vr = 202)
+    ("HTTP POST /interview/sessions/:id/verify-request "
+    ^ string_of_int (response_status vr));
+  E2e_ffi.assert_ (!sent <> []) "HTTP verify-request sent mail";
+  Interview_http.handle deps
+    (req "POST"
+       ("/.netlify/functions/interview/interview/sessions/" ^ id ^ "/ask")
+       ask_body)
+  >>= fun mounted_ask ->
+  E2e_ffi.assert_
+    (response_status mounted_ask = 200)
+    "function-mount HTTP ask";
+  E2e_ffi.pass "HTTP ask and verify-request paths";
+  return ()
+
+let prove_production_store_is_turso () =
+  let cfg =
+    Interview_config.of_source
+      ~source:
+        (source
+           [
+             env "INTERVIEW_STORE" "memory";
+             env "INTERVIEW_MAGIC_LINK_SECRET" "test-secret-interview-me";
+           ])
+      ()
+  in
+  (match Interview_config.missing_store cfg with
+  | Some "TURSO_DATABASE_URL" -> ()
+  | Some name ->
+      failwith ("expected TURSO_DATABASE_URL missing, got " ^ name)
+  | None -> failwith "INTERVIEW_STORE=memory must not satisfy the store");
+  let store = Interview_store.of_config cfg in
+  let dummy : Interview_store.session =
+    {
+      id = "ses_probe";
+      company = "Acme";
+      role = "Eng";
+      recruiter_name = "Pat";
+      work_email = "pat@acme.example";
+      work_domain = "acme.example";
+      callback_url = None;
+      hiring_timeline = None;
+      completed = [];
+      verified = false;
+      created_at = "2026-08-22T00:00:00.000Z";
+    }
+  in
+  store.put_session dummy
+  |> Js.Promise.then_ (fun () ->
+         failwith "of_config must not bind a memory store")
+  |> Js.Promise.catch (fun err ->
+         let msg = E2e_ffi.error_to_string err in
+         E2e_ffi.assert_
+           (Js.String.includes ~search:"TURSO_DATABASE_URL" msg
+           || Js.String.includes ~search:"missing_env" msg)
+           ("fail closed to Turso: " ^ msg);
+         E2e_ffi.pass "production store ignores INTERVIEW_STORE=memory";
+         return ())
+
+let prove_hold_mail_failure_does_not_orphan () =
+  let cfg = test_cfg [] in
+  let store = Interview_store.Memory.bind (Interview_store.Memory.create ()) in
+  let mail_ok, sent = Interview_mail.capture () in
+  let calendar, created = Interview_calendar.capture () in
+  let webhook, _ = Interview_service.capturing_webhook () in
+  let make mail : Interview_service.deps =
+    {
+      now_ms = Interview_crypto.now_ms;
+      random_id = Interview_crypto.random_id;
+      cfg;
+      store;
+      corpus = test_corpus ();
+      mail;
+      calendar;
+      webhook;
+    }
+  in
+  let deps = make mail_ok in
+  start_session deps "recruiter@acme.example" >>= fun session ->
+  complete_required deps session.id >>= fun () ->
+  Interview_service.request_verification deps ~session_id:session.id
+  >>= fun r ->
+  ignore (must_ok "vr" r);
+  let link =
+    match
+      E2e_ffi.capture1
+        [%mel.re "/https:\\/\\/scull7\\.com\\/interview\\/verify\\?token=([^\\s<]+)/"]
+        (List.hd !sent).text
+    with
+    | Some t -> t
+    | None -> failwith "link"
+  in
+  Interview_service.verify deps ~signed:link >>= fun r2 ->
+  let tok = must_ok "v" r2 in
+  let fail_deps = make (Interview_mail.failing ()) in
+  Interview_service.create_hold fail_deps ~start:"2026-09-01T17:00:00.000Z"
+    ~end_:None ~book_token:tok.book_token
+  >>= function
+  | Error (Interview_service.Mail _) ->
+      let now_iso = Interview_crypto.iso_of_ms (Interview_crypto.now_ms ()) in
+      store.count_active_holds session.work_domain now_iso >>= fun n ->
+      E2e_ffi.assert_ (n = 0) "no leftover hold after mail failure";
+      E2e_ffi.assert_
+        (!created = [])
+        "calendar event cancelled after mail failure";
+      Interview_service.create_hold deps ~start:"2026-09-01T17:00:00.000Z"
+        ~end_:None ~book_token:tok.book_token
+      >>= fun h ->
+      ignore (must_ok "retry hold after mail fail" h);
+      E2e_ffi.pass "mail failure does not orphan hold or eat book token";
+      return ()
+  | Error e ->
+      failwith
+        ("expected mail error, got "
+        ^ Interview_json.json_stringify (Interview_service.error_json e))
+  | Ok _ -> failwith "mail failure must be a user-visible error"
+
 let prove_function_bundle () =
   let interview_js =
     Node.Path.join [| E2e_ffi.root; "netlify/functions/interview.js" |]
@@ -554,8 +711,11 @@ let run () =
   prove_function_bundle ()
   >>= (fun () -> prove_session_and_ask ())
   >>= (fun () -> prove_free_email ())
+  >>= (fun () -> prove_http_ask_and_verify_request ())
+  >>= (fun () -> prove_production_store_is_turso ())
   >>= (fun () -> prove_qa_without_verify_hold_refused ())
   >>= (fun () -> prove_hold_requires_questions ())
+  >>= (fun () -> prove_hold_mail_failure_does_not_orphan ())
   >>= (fun () -> prove_hold_cap_and_success ())
   >>= (fun () -> prove_openapi_mcp ())
   >>= (fun () -> prove_refuse_does_not_complete ())

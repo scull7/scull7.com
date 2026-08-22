@@ -242,17 +242,8 @@ let mcp_ok id result =
       ("result", result);
     ]
 
-let last_segments path n =
-  let parts =
-    path |> String.split_on_char '/' |> List.filter (fun s -> s <> "")
-  in
-  let rec take acc rest k =
-    match (rest, k) with
-    | _, 0 -> acc
-    | [], _ -> acc
-    | x :: xs, k -> take (x :: acc) xs (k - 1)
-  in
-  take [] (List.rev parts) n
+let path_segments path =
+  path |> String.split_on_char '/' |> List.filter (fun s -> s <> "")
 
 let handle_start deps dict =
   Interview_service.start deps
@@ -529,10 +520,10 @@ let handle_rest deps req url =
     handle_verify deps req url
   else if path = "/interview/ban" && meth = "GET" then handle_ban deps req url
   else
-    match last_segments path 3 with
-    | [ "ask"; id; "sessions" ] when meth = "POST" && String.starts_with ~prefix:"/interview/sessions/" path ->
+    match (meth, path_segments path) with
+    | "POST", [ "interview"; "sessions"; id; "ask" ] ->
         read_object req >>= handle_ask deps id
-    | [ "verify-request"; id; "sessions" ] when meth = "POST" ->
+    | "POST", [ "interview"; "sessions"; id; "verify-request" ] ->
         handle_verify_request deps id
     | _ ->
         return
