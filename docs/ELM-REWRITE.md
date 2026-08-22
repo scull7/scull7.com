@@ -1,14 +1,16 @@
 # Elm + Melange stack
 
-**Updated:** 2026-08-07
+**Updated:** 2026-08-22
 
 | Layer | Tech |
 |-------|------|
 | UI / state / HTTP | Elm 0.19.1 |
-| Ports & bootstrap | **Melange 7** (OCaml → JS via Dune) |
-| Bundler | Vite + vite-plugin-elm |
+| Ports, Accept negotiation, Vite, e2e, Netlify edge | **Melange 7** (OCaml → JS via Dune) |
+| Bundler | Vite + vite-plugin-elm (config emitted from Melange) |
 | Styles | galaxy/vim CSS |
 | Data | `public/resume.json` |
+
+Authored JavaScript is not part of this stack. Dune emits browser, Node, edge, and e2e artifacts under `_build/`. See [FRAMEWORK-EXTRACT.md](FRAMEWORK-EXTRACT.md) / Pinto T-14 for the planned public-framework / private-site split.
 
 ## Ports
 

@@ -1,5 +1,7 @@
 node_modules/
 dist/
+netlify/edge-functions/negotiate.js
+netlify/edge-functions/_melange/
 .vite/
 elm-stuff/
 lib/

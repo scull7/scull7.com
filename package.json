@@ -5,24 +5,27 @@
   "description": "Nathan Sculli resume site — Elm · Melange ports · glassmorphic galaxy · vim UX",
   "type": "module",
   "scripts": {
-    "melange": "opam exec -- dune build @site",
+    "melange": "opam exec -- dune build @site && node _build/default/src/melange/artifacts/src/melange/emit_artifacts.cjs",
     "melange:watch": "opam exec -- dune build @site --watch",
     "elm:make": "elm make src/elm/Main.elm --output=/dev/null",
-    "dev": "npm run melange && concurrently -k -n mel,vite -c magenta,cyan \"npm run melange:watch\" \"vite\"",
-    "build": "npm run melange && vite build",
+    "vite": "vite --config _build/default/src/melange/vite/src/melange/vite_config.js",
+    "dev": "npm run melange && concurrently -k -n mel,vite -c magenta,cyan \"npm run melange:watch\" \"npm run vite\"",
+    "build": "npm run melange && npm run vite -- build",
     "inject:resume": "node _build/default/src/melange/crawlable/src/melange/crawlable_cli.cjs",
     "inject:resume:dist": "node _build/default/src/melange/crawlable/src/melange/crawlable_cli.cjs inject dist/index.html public/resume.json && node _build/default/src/melange/crawlable/src/melange/crawlable_cli.cjs write-md dist/index.md public/resume.json",
-    "preview": "vite preview",
+    "preview": "npm run vite -- preview",
     "opam:init": "opam switch create . 5.2.0 -y --no-install && opam install . --deps-only -y && npm install",
     "opam:deps": "opam install . --deps-only -y",
-    "test:e2e": "node e2e/run.mjs",
-    "test:e2e:only": "node e2e/navigation.mjs",
-    "test:t13": "node e2e/t13-crawlable.mjs",
-    "test:agentic": "node e2e/agentic.mjs",
+    "e2e": "node _build/default/src/melange/e2e/src/melange/e2e_cli.cjs",
+    "test:e2e": "npm run melange && npm run e2e -- run",
+    "test:e2e:only": "npm run melange && npm run e2e -- navigation",
+    "test:t13": "npm run melange && npm run e2e -- t13",
+    "test:agentic": "npm run melange && npm run e2e -- agentic",
     "test": "npm run elm:make && npm run test:t13 && SKIP_BUILD=1 npm run test:agentic && SKIP_BUILD=1 npm run test:e2e"
   },
   "dependencies": {
-    "melange": "7.0.1"
+    "melange": "7.0.1",
+    "melange.js": "7.0.1"
   },
   "devDependencies": {
     "concurrently": "^9.2.0",

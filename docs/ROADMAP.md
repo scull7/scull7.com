@@ -246,6 +246,7 @@ Later      Phase 5 as content ideas appear
 | Decision | Options | Recommendation |
 |----------|---------|----------------|
 | Ports language | Stay ReScript vs Melange | **Melange** (matches OCaml story; already implemented locally) |
+| Framework vs site | Monorepo vs extract | **Extract later (T-14):** public open-source framework repo; private scull7.com depends on it. See [`docs/FRAMEWORK-EXTRACT.md`](FRAMEWORK-EXTRACT.md). Do not extract in the current rewrite. |
 | Routing style | hash vs path | **hash first** (`#/experience`) then path if SEO needs it |
 | SEO strategy | prerender vs static inject | **static inject summary + jobs into index.html at build** (simplest) |
 | PDF | print CSS vs server PDF | **print CSS** first |
@@ -261,7 +262,8 @@ Later      Phase 5 as content ideas appear
 5. **Build step** inject noscript resume blurb + JSON-LD into `index.html`.  
 6. **Print CSS** for linear CV.  
 7. **CI workflow** `.github/workflows/ci.yml`.  
-8. **Archive** MoonBit improvement docs; leave one pointer in ROADMAP.
+8. **Archive** MoonBit improvement docs; leave one pointer in ROADMAP.  
+9. **T-14 (later):** public framework repo; private scull7.com site that depends on it.
 
 ---
 
