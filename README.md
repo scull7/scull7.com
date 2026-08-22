@@ -92,9 +92,14 @@ Palette-primary: `:` / `/` open the command palette; the bottom cmdline **echoes
 ## Testing
 
 ```bash
-npm test                 # elm make + build + Playwright e2e
+npm test                 # elm make + T-13 crawlable proof + Playwright e2e
+npm run test:t13         # no-JS Vite preview GET / + resume.json fixtures
 npx playwright install chromium   # once
 ```
+
+`test:t13` (`e2e/t13-crawlable.mjs`) fetches Vite preview `GET /` without executing
+JavaScript and inspects only `<noscript id="crawlable-resume">`. Local
+`public/resume.json` fixtures are restored with `git checkout` even on failure.
 
 ## Melange notes
 
