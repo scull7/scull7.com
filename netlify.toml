@@ -25,3 +25,22 @@
     Content-Type = "application/json; charset=utf-8"
     Access-Control-Allow-Origin = "*"
     Cache-Control = "public, max-age=300"
+
+[[headers]]
+  for = "/*.md"
+  [headers.values]
+    Content-Type = "text/markdown; charset=utf-8"
+
+[[headers]]
+  for = "/llms.txt"
+  [headers.values]
+    Content-Type = "text/markdown; charset=utf-8"
+
+[[headers]]
+  for = "/llms-full.txt"
+  [headers.values]
+    Content-Type = "text/markdown; charset=utf-8"
+
+[[edge_functions]]
+  function = "negotiate"
+  path = "/*"

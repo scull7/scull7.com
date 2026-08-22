@@ -4,6 +4,24 @@
     <loc>https://scull7.com/</loc>
   </url>
   <url>
+    <loc>https://scull7.com/about</loc>
+  </url>
+  <url>
+    <loc>https://scull7.com/contact</loc>
+  </url>
+  <url>
+    <loc>https://scull7.com/privacy</loc>
+  </url>
+  <url>
+    <loc>https://scull7.com/for-agents</loc>
+  </url>
+  <url>
+    <loc>https://scull7.com/llms.txt</loc>
+  </url>
+  <url>
+    <loc>https://scull7.com/llms-full.txt</loc>
+  </url>
+  <url>
     <loc>https://scull7.com/resume.json</loc>
   </url>
 </urlset>
