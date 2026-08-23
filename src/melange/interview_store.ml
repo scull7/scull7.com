@@ -1,4 +1,4 @@
-(* Session persistence. Production is Turso (libSQL HTTP) only.
+(* Session and token persistence. Production is Turso (libSQL HTTP) only.
    Tests may inject Memory.bind; of_config never honors INTERVIEW_STORE=memory. *)
 
 type session = {
@@ -13,17 +13,30 @@ type session = {
   created_at : string;
 }
 
+type token = {
+  token : string;
+  kind : string;
+  session_id : string;
+  expires_at : string;
+  consumed : bool;
+  created_at : string;
+}
+
 type t = {
   ensure_schema : unit -> unit Js.Promise.t;
   put_session : session -> unit Js.Promise.t;
   get_session : string -> session option Js.Promise.t;
+  put_token : token -> unit Js.Promise.t;
+  get_token : string -> token option Js.Promise.t;
+  consume_token : string -> unit Js.Promise.t;
 }
 
 let ( >>= ) p f = Js.Promise.then_ f p
 let return x = Js.Promise.resolve x
 
 let schema_sql =
-  {|CREATE TABLE IF NOT EXISTS interview_sessions (
+  [
+    {|CREATE TABLE IF NOT EXISTS interview_sessions (
         id TEXT PRIMARY KEY,
         company TEXT NOT NULL,
         role TEXT NOT NULL,
@@ -33,12 +46,25 @@ let schema_sql =
         callback_url TEXT,
         verified INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL
-      )|}
+      )|};
+    {|CREATE TABLE IF NOT EXISTS interview_tokens (
+        token TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        consumed INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )|};
+  ]
 
 module Memory = struct
-  type tables = { sessions : (string, session) Hashtbl.t }
+  type tables = {
+    sessions : (string, session) Hashtbl.t;
+    tokens : (string, token) Hashtbl.t;
+  }
 
-  let create () = { sessions = Hashtbl.create 16 }
+  let create () =
+    { sessions = Hashtbl.create 16; tokens = Hashtbl.create 16 }
 
   let bind tables : t =
     {
@@ -51,6 +77,21 @@ module Memory = struct
         (fun id ->
           return
             (try Some (Hashtbl.find tables.sessions id) with Not_found -> None));
+      put_token =
+        (fun tok ->
+          Hashtbl.replace tables.tokens tok.token tok;
+          return ());
+      get_token =
+        (fun id ->
+          return
+            (try Some (Hashtbl.find tables.tokens id) with Not_found -> None));
+      consume_token =
+        (fun id ->
+          (try
+             let tok = Hashtbl.find tables.tokens id in
+             Hashtbl.replace tables.tokens id { tok with consumed = true }
+           with Not_found -> ());
+          return ());
     }
 end
 
@@ -194,6 +235,26 @@ let session_of_row = function
         created_at = "";
       }
 
+let token_of_row = function
+  | token :: kind :: session_id :: expires :: consumed :: created :: _ ->
+      {
+        token;
+        kind;
+        session_id;
+        expires_at = expires;
+        consumed = consumed = "1" || consumed = "true";
+        created_at = created;
+      }
+  | _ ->
+      {
+        token = "";
+        kind = "";
+        session_id = "";
+        expires_at = "";
+        consumed = false;
+        created_at = "";
+      }
+
 let clip_body body =
   let t = String.trim body in
   if String.length t <= 300 then t else String.sub t 0 297 ^ "..."
@@ -248,7 +309,7 @@ let turso ~url ~token () : t =
   let ensure () =
     if !ready then return ()
     else
-      post [ exec_stmt schema_sql [] ] >>= fun _ ->
+      post (List.map (fun sql -> exec_stmt sql []) schema_sql) >>= fun _ ->
       ready := true;
       return ()
   in
@@ -301,6 +362,53 @@ let turso ~url ~token () : t =
             let s = session_of_row row in
             return (if s.id = "" then None else Some s)
         | [] -> return None);
+    put_token =
+      (fun tok ->
+        ensure () >>= fun () ->
+        post
+          [
+            exec_stmt
+              {|INSERT INTO interview_tokens
+                  (token, kind, session_id, expires_at, consumed, created_at)
+                VALUES (?,?,?,?,?,?)
+                ON CONFLICT(token) DO UPDATE SET
+                  consumed=excluded.consumed, expires_at=excluded.expires_at|}
+              [
+                arg_text tok.token;
+                arg_text tok.kind;
+                arg_text tok.session_id;
+                arg_text tok.expires_at;
+                arg_int (if tok.consumed then 1 else 0);
+                arg_text tok.created_at;
+              ];
+          ]
+        >>= fun _ -> return ());
+    get_token =
+      (fun id ->
+        ensure () >>= fun () ->
+        post
+          [
+            exec_stmt
+              {|SELECT token, kind, session_id, expires_at, consumed, created_at
+                  FROM interview_tokens WHERE token = ?|}
+              [ arg_text id ];
+          ]
+        >>= fun json ->
+        match rows_of_result json with
+        | row :: _ ->
+            let tok = token_of_row row in
+            return (if tok.token = "" then None else Some tok)
+        | [] -> return None);
+    consume_token =
+      (fun id ->
+        ensure () >>= fun () ->
+        post
+          [
+            exec_stmt
+              "UPDATE interview_tokens SET consumed = 1 WHERE token = ?"
+              [ arg_text id ];
+          ]
+        >>= fun _ -> return ());
   }
 
 let unavailable name : t =
@@ -309,6 +417,9 @@ let unavailable name : t =
     ensure_schema = (fun () -> fail ());
     put_session = (fun _ -> fail ());
     get_session = (fun _ -> fail ());
+    put_token = (fun _ -> fail ());
+    get_token = (fun _ -> fail ());
+    consume_token = (fun _ -> fail ());
   }
 
 let of_config (cfg : Interview_config.t) =

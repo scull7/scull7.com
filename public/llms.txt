@@ -8,11 +8,11 @@ scull7.com publishes Nathan Sculli’s background, JSON Resume, and contact fact
 
 Use the **static resume site** when you need Nathan Sculli’s background, current resume, contact information, or experience at TensorWave and prior ventures (Sub Zero Corp, Banner, Backtrace.io, Marker Trax, Influential, Allegiant Air, and earlier roles). Use it to answer who he is, where he works, how to email him (nathan@vegasbuckeye.com), and what he has shipped as an IC and engineering leader. Those facts live in `/resume.json` and the public pages.
 
-Use **interview-me** when a recruiter agent needs to start a named session and ask cited questions against those published facts (or receive a refusal for unpublished ones). Discover it here:
+Use **interview-me** when a recruiter agent needs to start a named session and ask cited questions against those published facts (or receive a refusal for unpublished ones). To book later, the agent requests verification mail (`request_verification` / `POST /interview/sessions/{id}/verify-request`); the recruiter human clicks `GET /interview/verify?token=` and the agent receives a short-lived book token. The agent never needs inbox access. Discover it here:
 
 - OpenAPI: https://scull7.com/openapi.json
 - MCP: https://scull7.com/mcp (tools: `start_interview`, `ask_nathan`, `request_verification`, `create_hold`, `get_resume`)
-- HTTP: `POST /interview/sessions`, `POST /interview/sessions/{id}/ask`, `GET /interview/resume`, `GET /interview/experience?q=`
+- HTTP: `POST /interview/sessions`, `POST /interview/sessions/{id}/ask`, `POST /interview/sessions/{id}/verify-request`, `GET /interview/verify?token=`, `GET /interview/resume`, `GET /interview/experience?q=`
 
 The static resume site is not a generic SaaS console and not a place to provision partner keys. Interview-me is the recruiter-agent product; the homepage is still the resume. Company OAuth, practice mode, and live audio/video are out of scope. Contact remains nathan@vegasbuckeye.com. No street address is published.
 

@@ -1,5 +1,5 @@
-(* OpenAPI 3 contract for T-16 surfaces. Named request/response properties,
-   not path-name stubs. *)
+(* OpenAPI 3 contract for T-16/T-17 surfaces. Named request/response
+   properties, not path-name stubs. *)
 
 let string_prop = Interview_json.obj [ ("type", Interview_json.str "string") ]
 
@@ -32,6 +32,7 @@ let schema_error =
                   Interview_json.str "not_found";
                   Interview_json.str "free_email";
                   Interview_json.str "missing_env";
+                  Interview_json.str "token_invalid";
                 ] );
           ] );
       ("message", string_prop);
@@ -104,6 +105,18 @@ let experience_item =
       ("quote", string_prop);
     ]
 
+let verify_request_202 =
+  object_schema ~required:[ "session_id"; "sent" ]
+    [ ("session_id", string_prop); ("sent", bool_prop) ]
+
+let verify_200 =
+  object_schema ~required:[ "session_id"; "book_token"; "expires_at" ]
+    [
+      ("session_id", string_prop);
+      ("book_token", string_prop);
+      ("expires_at", string_prop);
+    ]
+
 let experience_200 =
   object_schema ~required:[ "results" ]
     [
@@ -144,8 +157,8 @@ let document ~site_url =
             ( "description",
               Interview_json.str
                 "Recruiter-agent interview of Nathan Sculli: named Turso \
-                 sessions, cited Q&A from the published corpus, resume and \
-                 experience search. Discover via OpenAPI and MCP." );
+                 sessions, cited Q&A, human work-email magic-link verify, \
+                 resume and experience search. Discover via OpenAPI and MCP." );
             ( "contact",
               Interview_json.obj
                 [
@@ -253,6 +266,101 @@ let document ~site_url =
                             ] );
                       ] );
                 ] );
+            ( "/interview/sessions/{id}/verify-request",
+              Interview_json.obj
+                [
+                  ( "post",
+                    Interview_json.obj
+                      [
+                        ("operationId", Interview_json.str "requestVerification");
+                        ( "summary",
+                          Interview_json.str
+                            "Send a magic-link email to the session work \
+                             email. Does not return the magic URL or book \
+                             token." );
+                        ( "parameters",
+                          Interview_json.arr
+                            [
+                              Interview_json.obj
+                                [
+                                  ("name", Interview_json.str "id");
+                                  ("in", Interview_json.str "path");
+                                  ("required", Interview_json.bool true);
+                                  ("schema", string_prop);
+                                ];
+                            ] );
+                        ( "responses",
+                          Interview_json.obj
+                            [
+                              ( "202",
+                                Interview_json.obj
+                                  [
+                                    ( "description",
+                                      Interview_json.str
+                                        "Magic-link mail accepted" );
+                                    ("content", json_content verify_request_202);
+                                  ] );
+                              ( "404",
+                                Interview_json.obj
+                                  [
+                                    ( "description",
+                                      Interview_json.str "not_found" );
+                                    ("content", json_content schema_error);
+                                  ] );
+                              ( "503",
+                                Interview_json.obj
+                                  [
+                                    ( "description",
+                                      Interview_json.str "missing_env" );
+                                    ("content", json_content schema_error);
+                                  ] );
+                            ] );
+                      ] );
+                ] );
+            ( "/interview/verify",
+              Interview_json.obj
+                [
+                  ( "get",
+                    Interview_json.obj
+                      [
+                        ("operationId", Interview_json.str "verifyMagicLink");
+                        ( "summary",
+                          Interview_json.str
+                            "Human magic-link click. Issues a short-lived \
+                             book token scoped to that session." );
+                        ( "parameters",
+                          Interview_json.arr
+                            [
+                              Interview_json.obj
+                                [
+                                  ("name", Interview_json.str "token");
+                                  ("in", Interview_json.str "query");
+                                  ("required", Interview_json.bool true);
+                                  ("schema", string_prop);
+                                ];
+                            ] );
+                        ( "responses",
+                          Interview_json.obj
+                            [
+                              ( "200",
+                                Interview_json.obj
+                                  [
+                                    ( "description",
+                                      Interview_json.str
+                                        "Book token for the requesting session"
+                                    );
+                                    ("content", json_content verify_200);
+                                  ] );
+                              ( "401",
+                                Interview_json.obj
+                                  [
+                                    ( "description",
+                                      Interview_json.str "token_invalid" );
+                                    ("content", json_content schema_error);
+                                  ] );
+                            ] );
+                      ] );
+                ] );
             ( "/interview/resume",
               Interview_json.obj
                 [
@@ -340,8 +448,9 @@ let document ~site_url =
                         ( "summary",
                           Interview_json.str
                             "MCP JSON-RPC. start_interview, ask_nathan, and \
-                             get_resume match HTTP. request_verification and \
-                             create_hold fail closed." );
+                             get_resume match HTTP. request_verification \
+                             matches HTTP verify-request. create_hold fail \
+                             closed." );
                         ( "responses",
                           Interview_json.obj
                             [

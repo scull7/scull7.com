@@ -1,5 +1,6 @@
-(* Interview-me T-16 configuration. Free-email lists and Turso env are
-   overridable without a code change. INTERVIEW_STORE is ignored. *)
+(* Interview-me T-16/T-17 configuration. Free-email lists, Turso env,
+   magic-link TTL, and mail sender are overridable without a code change.
+   INTERVIEW_STORE is ignored. *)
 
 type t = {
   site_url : string;
@@ -7,6 +8,11 @@ type t = {
   email_allowlist : string list;
   turso_url : string option;
   turso_token : string option;
+  mail_from : string;
+  magic_link_secret : string option;
+  magic_link_ttl_ms : float;
+  book_token_ttl_ms : float;
+  resend_api_key : string option;
 }
 
 type source = string -> string option
@@ -54,6 +60,11 @@ let split_csv raw =
   raw |> String.split_on_char ',' |> List.map String.trim
   |> List.filter (fun s -> s <> "")
 
+let parse_float fallback raw =
+  match raw with
+  | None -> fallback
+  | Some s -> ( try float_of_string (String.trim s) with _ -> fallback)
+
 let of_source ?(source = process_source) () =
   {
     site_url =
@@ -78,6 +89,25 @@ let of_source ?(source = process_source) () =
       (match source "TURSO_AUTH_TOKEN" with
       | Some v -> Some (sanitize_secret v)
       | None -> None);
+    mail_from =
+      (match source "INTERVIEW_MAIL_FROM" with
+      | Some v -> String.trim v
+      | None -> "nathan@vegasbuckeye.com");
+    magic_link_secret =
+      (match source "INTERVIEW_MAGIC_LINK_SECRET" with
+      | Some v -> Some (sanitize_secret v)
+      | None -> None);
+    magic_link_ttl_ms =
+      parse_float 86_400_000. (source "INTERVIEW_MAGIC_LINK_TTL_MS");
+    book_token_ttl_ms =
+      parse_float 1_800_000. (source "INTERVIEW_BOOK_TOKEN_TTL_MS");
+    resend_api_key =
+      (match source "RESEND_API_KEY" with
+      | Some v -> Some (sanitize_secret v)
+      | None -> (
+          match source "INTERVIEW_RESEND_API_KEY" with
+          | Some v -> Some (sanitize_secret v)
+          | None -> None));
   }
 
 let load () = of_source ()
@@ -87,6 +117,16 @@ let missing_store cfg =
   | Some _, Some _ -> None
   | None, _ -> Some "TURSO_DATABASE_URL"
   | _, None -> Some "TURSO_AUTH_TOKEN"
+
+let missing_magic_secret cfg =
+  match cfg.magic_link_secret with
+  | Some _ -> None
+  | None -> Some "INTERVIEW_MAGIC_LINK_SECRET"
+
+let missing_mail cfg =
+  match cfg.resend_api_key with
+  | Some _ -> None
+  | None -> Some "RESEND_API_KEY"
 
 let normalize_block item =
   let s = String.lowercase_ascii (String.trim item) in

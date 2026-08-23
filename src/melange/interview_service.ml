@@ -1,10 +1,12 @@
-(* Named session + cited ask. Verify/hold are fail-closed names only. *)
+(* Named session + cited ask + human magic-link verify. create_hold stays
+   fail-closed; T-19 owns calendar holds. *)
 
 type error =
   | Missing_env of string
   | Invalid of string
   | Free_email of string
   | Not_found
+  | Token_invalid of string
 
 type start_input = {
   company : string;
@@ -27,12 +29,22 @@ type ask_output = {
   refused : bool;
 }
 
+type verify_request_output = { session_id : string }
+
+type verify_output = {
+  session_id : string;
+  book_token : string;
+  expires_at : string;
+}
+
 type deps = {
   now_ms : unit -> float;
   random_id : unit -> string;
   cfg : Interview_config.t;
   store : Interview_store.t;
   corpus : Interview_corpus.t;
+  mail : Interview_mail.t;
+  calendar : Interview_calendar.t;
 }
 
 let ( >>= ) p f = Js.Promise.then_ f p
@@ -156,10 +168,148 @@ let ask (deps : deps) ~session_id ~question =
                     | Interview_corpus.Cited _ -> false);
                 })
 
-let request_verification (_deps : deps) ~session_id:_ =
-  err (Invalid "request_verification is not available")
+let escape_html s =
+  s
+  |> Js.String.replaceByRe ~regexp:[%mel.re "/&/g"] ~replacement:"&amp;"
+  |> Js.String.replaceByRe ~regexp:[%mel.re "/</g"] ~replacement:"&lt;"
+  |> Js.String.replaceByRe ~regexp:[%mel.re "/>/g"] ~replacement:"&gt;"
+  |> Js.String.replaceByRe ~regexp:[%mel.re "/\"/g"] ~replacement:"&quot;"
+
+let request_verification (deps : deps) ~session_id =
+  match Interview_config.missing_store deps.cfg with
+  | Some name -> err (Missing_env name)
+  | None -> (
+      match Interview_config.missing_magic_secret deps.cfg with
+      | Some name -> err (Missing_env name)
+      | None -> (
+          match Interview_config.missing_mail deps.cfg with
+          | Some name -> err (Missing_env name)
+          | None ->
+              catch_store
+                (deps.store.get_session session_id >>= function
+                | None -> err Not_found
+                | Some session -> (
+                    match deps.cfg.magic_link_secret with
+                    | None -> err (Missing_env "INTERVIEW_MAGIC_LINK_SECRET")
+                    | Some secret ->
+                        let now = deps.now_ms () in
+                        let raw = deps.random_id () in
+                        let expires_at =
+                          Interview_token.expires_at_iso ~now_ms:now
+                            ~ttl_ms:deps.cfg.magic_link_ttl_ms
+                        in
+                        let tok : Interview_store.token =
+                          {
+                            token = raw;
+                            kind = "magic";
+                            session_id = session.id;
+                            expires_at;
+                            consumed = false;
+                            created_at = Interview_clock.iso_of_ms now;
+                          }
+                        in
+                        let signed = Interview_token.sign_token secret raw in
+                        let link =
+                          Interview_token.magic_link ~site_url:deps.cfg.site_url
+                            ~signed
+                        in
+                        let subject =
+                          "Verify your work email for interview-me"
+                        in
+                        let text =
+                          "Click to verify your work email for the \
+                           interview-me session with Nathan Sculli:\n\n" ^ link
+                          ^ "\n\nThe agent never needs your inbox. After you \
+                             click, you will see a short-lived book token to \
+                             give the agent.\n\nContact: \
+                             nathan@vegasbuckeye.com"
+                        in
+                        let html =
+                          "<p>Click to verify your work email for the \
+                           interview-me session with Nathan Sculli.</p><p><a \
+                           href=\"" ^ escape_html link
+                          ^ "\">Verify work email</a></p><p>The agent never \
+                             needs your inbox. After you click, you will see \
+                             a short-lived book token to give the agent.</p>\
+                             <p>Contact: nathan@vegasbuckeye.com</p>"
+                        in
+                        deps.mail.send
+                          {
+                            to_ = session.work_email;
+                            from_ = deps.cfg.mail_from;
+                            subject;
+                            text;
+                            html;
+                          }
+                        >>= function
+                        | Error msg ->
+                            if String.starts_with ~prefix:"missing_env:" msg then
+                              err
+                                (Missing_env
+                                   (String.sub msg 12 (String.length msg - 12)))
+                            else err (Invalid msg)
+                        | Ok _ ->
+                            deps.store.put_token tok >>= fun () ->
+                            ok { session_id = session.id }))))
+
+let verify (deps : deps) ~signed =
+  match Interview_config.missing_store deps.cfg with
+  | Some name -> err (Missing_env name)
+  | None -> (
+      let signed = String.trim signed in
+      if signed = "" then err (Token_invalid "empty token")
+      else
+        match deps.cfg.magic_link_secret with
+        | None -> err (Missing_env "INTERVIEW_MAGIC_LINK_SECRET")
+        | Some secret -> (
+            match Interview_token.unsign_token secret signed with
+            | None -> err (Token_invalid "bad signature")
+            | Some raw ->
+                catch_store
+                  (deps.store.get_token raw >>= function
+                  | None -> err (Token_invalid "unknown token")
+                  | Some tok ->
+                      let now = deps.now_ms () in
+                      if tok.kind <> "magic" then
+                        err (Token_invalid "wrong kind")
+                      else if tok.consumed then
+                        err (Token_invalid "already used")
+                      else if Interview_token.is_expired ~now_ms:now tok.expires_at
+                      then err (Token_invalid "expired")
+                      else
+                        deps.store.get_session tok.session_id >>= function
+                        | None -> err Not_found
+                        | Some session ->
+                            deps.store.consume_token raw >>= fun () ->
+                            let book_raw = deps.random_id () in
+                            let expires_at =
+                              Interview_token.expires_at_iso ~now_ms:now
+                                ~ttl_ms:deps.cfg.book_token_ttl_ms
+                            in
+                            let book : Interview_store.token =
+                              {
+                                token = book_raw;
+                                kind = "book";
+                                session_id = session.id;
+                                expires_at;
+                                consumed = false;
+                                created_at = Interview_clock.iso_of_ms now;
+                              }
+                            in
+                            deps.store.put_token book >>= fun () ->
+                            deps.store.put_session
+                              { session with verified = true }
+                            >>= fun () ->
+                            ok
+                              {
+                                session_id = session.id;
+                                book_token =
+                                  Interview_token.sign_token secret book_raw;
+                                expires_at;
+                              })))
 
 let create_hold (_deps : deps) ~start:_ ~end_:_ ~book_token:_ =
+  (* T-19. Never call the calendar action. *)
   err (Invalid "create_hold is not available")
 
 let get_resume (deps : deps) = deps.corpus.resume_json
@@ -172,12 +322,14 @@ let error_code = function
   | Invalid _ -> 400
   | Free_email _ -> 400
   | Not_found -> 404
+  | Token_invalid _ -> 401
 
 let error_name = function
   | Missing_env _ -> "missing_env"
   | Invalid _ -> "invalid"
   | Free_email _ -> "free_email"
   | Not_found -> "not_found"
+  | Token_invalid _ -> "token_invalid"
 
 let error_json = function
   | Missing_env name ->
@@ -199,3 +351,9 @@ let error_json = function
           ("domain", Interview_json.str domain);
         ]
   | Not_found -> Interview_json.obj [ ("error", Interview_json.str "not_found") ]
+  | Token_invalid msg ->
+      Interview_json.obj
+        [
+          ("error", Interview_json.str "token_invalid");
+          ("message", Interview_json.str msg);
+        ]

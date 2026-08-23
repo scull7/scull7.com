@@ -168,6 +168,8 @@ let deps_for request context =
              cfg;
              store = Interview_store.of_config cfg;
              corpus;
+             mail = Interview_mail.of_config cfg;
+             calendar = Interview_calendar.unused ();
            })
 
 let config =
