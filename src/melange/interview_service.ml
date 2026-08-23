@@ -1,13 +1,16 @@
 (* Named session + cited ask + required-set progress + human magic-link
-   verify. create_hold stays fail-closed; T-19 owns calendar holds.
-   Required-set matching is a calculation; webhook POST is isolated. *)
+   verify + book-token create_hold. Cap/ban/refuse are calculations;
+   GCal, Resend HTTP, and webhook POST are isolated actions. *)
 
 type error =
   | Missing_env of string
   | Invalid of string
   | Free_email of string
+  | Banned of string
   | Not_found
   | Token_invalid of string
+  | Required_incomplete of string list
+  | Hold_cap of int
 
 type start_input = {
   company : string;
@@ -38,6 +41,16 @@ type verify_output = {
   session_id : string;
   book_token : string;
   expires_at : string;
+}
+
+type hold_output = {
+  hold_id : string;
+  session_id : string;
+  start : string;
+  end_ : string;
+  calendar_id : string;
+  calendar_event_id : string;
+  html_link : string;
 }
 
 type deps = {
@@ -118,26 +131,31 @@ let start (deps : deps) (input : start_input) =
       else
         let domain = Interview_config.email_domain email in
         let now = Interview_clock.iso_of_ms (deps.now_ms ()) in
-        let session : Interview_store.session =
-          {
-            id = "ses_" ^ deps.random_id ();
-            company;
-            role;
-            recruiter_name = recruiter;
-            work_email = email;
-            work_domain = domain;
-            callback_url =
-              (match input.callback_url with
-              | Some u when String.trim u <> "" -> Some (String.trim u)
-              | _ -> None);
-            hiring_timeline = None;
-            completed = [];
-            verified = false;
-            created_at = now;
-          }
-        in
         catch_store
-          (deps.store.put_session session >>= fun () -> ok session)
+          (deps.store.is_banned "address" email >>= fun addr_ban ->
+           deps.store.is_banned "domain" domain >>= fun domain_ban ->
+           if addr_ban then err (Banned email)
+           else if domain_ban then err (Banned domain)
+           else
+             let session : Interview_store.session =
+               {
+                 id = "ses_" ^ deps.random_id ();
+                 company;
+                 role;
+                 recruiter_name = recruiter;
+                 work_email = email;
+                 work_domain = domain;
+                 callback_url =
+                   (match input.callback_url with
+                   | Some u when String.trim u <> "" -> Some (String.trim u)
+                   | _ -> None);
+                 hiring_timeline = None;
+                 completed = [];
+                 verified = false;
+                 created_at = now;
+               }
+             in
+             deps.store.put_session session >>= fun () -> ok session)
 
 let ask_fields (session : Interview_store.session) ~answer ~cited ~citation
     ~refused (snap : Interview_required.snapshot) : ask_output =
@@ -388,9 +406,289 @@ let verify (deps : deps) ~signed =
                                 expires_at;
                               })))
 
-let create_hold (_deps : deps) ~start:_ ~end_:_ ~book_token:_ =
-  (* T-19. Never call the calendar action. *)
-  err (Invalid "create_hold is not available")
+let lookup_book (deps : deps) signed =
+  let signed = String.trim signed in
+  if signed = "" then err (Token_invalid "empty token")
+  else
+    match deps.cfg.magic_link_secret with
+    | None -> err (Missing_env "INTERVIEW_MAGIC_LINK_SECRET")
+    | Some secret -> (
+        match Interview_token.unsign_token secret signed with
+        | None -> err (Token_invalid "bad signature")
+        | Some raw ->
+            catch_store
+              (deps.store.get_token raw >>= function
+              | None -> err (Token_invalid "unknown token")
+              | Some tok ->
+                  let now = deps.now_ms () in
+                  if tok.kind <> "book" then
+                    err (Token_invalid "not a book token")
+                  else if tok.consumed then
+                    err (Token_invalid "already used")
+                  else if Interview_token.is_expired ~now_ms:now tok.expires_at
+                  then err (Token_invalid "expired")
+                  else
+                    deps.store.get_session tok.session_id >>= function
+                    | None -> err (Token_invalid "unknown session")
+                    | Some session -> ok (tok, session)))
+
+let hold_notification (deps : deps) (session : Interview_store.session)
+    (hold : Interview_store.hold) ban_address_url ban_domain_url =
+  let subject =
+    "Interview-me hold: " ^ session.company ^ " / " ^ session.role
+  in
+  let text =
+    String.concat "\n"
+      [
+        "A recruiter agent created a tentative calendar hold.";
+        "";
+        "Company: " ^ session.company;
+        "Role: " ^ session.role;
+        "Recruiter: " ^ session.recruiter_name;
+        "Work email: " ^ session.work_email;
+        "Start: " ^ hold.start_at;
+        "End: " ^ hold.end_at;
+        "Calendar: " ^ hold.calendar_id;
+        "";
+        "Ban this address: " ^ ban_address_url;
+        "Ban this domain: " ^ ban_domain_url;
+        "";
+        "Contact: nathan@vegasbuckeye.com";
+      ]
+  in
+  let html =
+    "<p>A recruiter agent created a tentative calendar hold.</p><ul><li>Company: "
+    ^ escape_html session.company ^ "</li><li>Role: "
+    ^ escape_html session.role ^ "</li><li>Recruiter: "
+    ^ escape_html session.recruiter_name ^ "</li><li>Work email: "
+    ^ escape_html session.work_email ^ "</li><li>Start: "
+    ^ escape_html hold.start_at ^ "</li><li>End: " ^ escape_html hold.end_at
+    ^ "</li></ul><p><a href=\"" ^ escape_html ban_address_url
+    ^ "\">Ban this address</a> · <a href=\"" ^ escape_html ban_domain_url
+    ^ "\">Ban this domain</a></p><p>Contact: nathan@vegasbuckeye.com</p>"
+  in
+  deps.mail.send
+    {
+      to_ = deps.cfg.mail_to;
+      from_ = deps.cfg.mail_from;
+      subject;
+      text;
+      html;
+    }
+
+let fire_booking deps (session : Interview_store.session) ~hold_id ~start
+    ~end_ =
+  match session.callback_url with
+  | None -> return ()
+  | Some url ->
+      let body =
+        Interview_json.json_stringify
+          (Interview_webhook.booking_requested_body ~session ~hold_id ~start
+             ~end_)
+      in
+      deps.webhook.post url body
+      >>= (function Ok () | Error _ -> return ())
+      |> Js.Promise.catch (fun _ -> return ())
+
+let env_error msg =
+  let prefix = "missing_env:" in
+  if String.starts_with ~prefix msg then
+    Missing_env
+      (String.sub msg (String.length prefix)
+         (String.length msg - String.length prefix))
+  else Invalid msg
+
+let create_hold (deps : deps) ~start ~end_ ~book_token =
+  match Interview_config.missing_store deps.cfg with
+  | Some name -> err (Missing_env name)
+  | None ->
+      let start_iso = String.trim start in
+      if start_iso = "" then err (Invalid "start is required")
+      else
+        lookup_book deps book_token >>= function
+        | Error e -> return (Error e)
+        | Ok (book, session) ->
+            let required = Interview_config.required_ids deps.cfg in
+            let snap =
+              Interview_required.snapshot required
+                {
+                  completed = session.completed;
+                  hiring_timeline = session.hiring_timeline;
+                }
+            in
+            if snap.required_remaining <> [] then
+              err (Required_incomplete snap.required_remaining)
+            else (
+              match
+                ( Interview_config.missing_calendar deps.cfg,
+                  Interview_config.missing_mail deps.cfg )
+              with
+              | Some name, _ | None, Some name -> err (Missing_env name)
+              | None, None ->
+                  let now = deps.now_ms () in
+                  let now_iso = Interview_clock.iso_of_ms now in
+                  catch_store
+                    (deps.store.count_active_holds session.work_domain now_iso
+                     >>= fun n ->
+                     if
+                       Interview_hold.at_or_over_cap ~active:n
+                         ~cap:deps.cfg.hold_cap
+                     then err (Hold_cap deps.cfg.hold_cap)
+                     else
+                       let end_iso =
+                         Interview_hold.resolve_end ~start_iso ~end_
+                           ~default_seconds:deps.cfg.hold_default_seconds
+                       in
+                       let req : Interview_calendar.request =
+                         {
+                           calendar_id = deps.cfg.calendar_id;
+                           summary =
+                             "Interview hold: " ^ session.company ^ " / "
+                             ^ session.role;
+                           description =
+                             "Tentative hold from interview-me. Recruiter: "
+                             ^ session.recruiter_name ^ " <"
+                             ^ session.work_email ^ ">";
+                           start_iso;
+                           end_iso;
+                         }
+                       in
+                       deps.calendar.create_tentative req >>= function
+                       | Error msg -> err (env_error msg)
+                       | Ok created -> (
+                           match deps.cfg.magic_link_secret with
+                           | None ->
+                               deps.calendar.delete_event
+                                 ~calendar_id:created.calendar_id
+                                 ~event_id:created.event_id
+                               >>= fun _ ->
+                               err (Missing_env "INTERVIEW_MAGIC_LINK_SECRET")
+                           | Some secret ->
+                               let ban_addr_raw = deps.random_id () in
+                               let ban_dom_raw = deps.random_id () in
+                               let exp =
+                                 Interview_token.expires_at_iso ~now_ms:now
+                                   ~ttl_ms:(30. *. 86_400_000.)
+                               in
+                               let ban_address_url =
+                                 Interview_token.ban_link
+                                   ~site_url:deps.cfg.site_url ~kind:"address"
+                                   ~signed:
+                                     (Interview_token.sign_token secret
+                                        ban_addr_raw)
+                               in
+                               let ban_domain_url =
+                                 Interview_token.ban_link
+                                   ~site_url:deps.cfg.site_url ~kind:"domain"
+                                   ~signed:
+                                     (Interview_token.sign_token secret
+                                        ban_dom_raw)
+                               in
+                               let hold : Interview_store.hold =
+                                 {
+                                   id = "hld_" ^ deps.random_id ();
+                                   session_id = session.id;
+                                   work_domain = session.work_domain;
+                                   start_at = start_iso;
+                                   end_at = end_iso;
+                                   status = "tentative";
+                                   calendar_id = created.calendar_id;
+                                   calendar_event_id = created.event_id;
+                                   created_at = now_iso;
+                                 }
+                               in
+                               hold_notification deps session hold
+                                 ban_address_url ban_domain_url
+                               >>= function
+                               | Error msg ->
+                                   deps.calendar.delete_event
+                                     ~calendar_id:created.calendar_id
+                                     ~event_id:created.event_id
+                                   >>= fun _ -> err (env_error msg)
+                               | Ok _ ->
+                                   deps.store.put_hold hold >>= fun () ->
+                                   deps.store.consume_token book.token
+                                   >>= fun () ->
+                                   deps.store.put_token
+                                     {
+                                       token = ban_addr_raw;
+                                       kind = "ban_address";
+                                       session_id = session.id;
+                                       expires_at = exp;
+                                       consumed = false;
+                                       created_at = now_iso;
+                                     }
+                                   >>= fun () ->
+                                   deps.store.put_token
+                                     {
+                                       token = ban_dom_raw;
+                                       kind = "ban_domain";
+                                       session_id = session.id;
+                                       expires_at = exp;
+                                       consumed = false;
+                                       created_at = now_iso;
+                                     }
+                                   >>= fun () ->
+                                   fire_booking deps session ~hold_id:hold.id
+                                     ~start:start_iso ~end_:end_iso
+                                   >>= fun () ->
+                                   ok
+                                     {
+                                       hold_id = hold.id;
+                                       session_id = session.id;
+                                       start = start_iso;
+                                       end_ = end_iso;
+                                       calendar_id = created.calendar_id;
+                                       calendar_event_id = created.event_id;
+                                       html_link = created.html_link;
+                                     })))
+
+let ban (deps : deps) ~kind ~signed =
+  match Interview_config.missing_store deps.cfg with
+  | Some name -> err (Missing_env name)
+  | None -> (
+      match deps.cfg.magic_link_secret with
+      | None -> err (Missing_env "INTERVIEW_MAGIC_LINK_SECRET")
+      | Some secret -> (
+          let signed = String.trim signed in
+          if signed = "" then err (Token_invalid "empty token")
+          else
+            match Interview_token.unsign_token secret signed with
+            | None -> err (Token_invalid "bad signature")
+            | Some raw ->
+                catch_store
+                  (deps.store.get_token raw >>= function
+                  | None -> err (Token_invalid "unknown token")
+                  | Some tok ->
+                      let now = deps.now_ms () in
+                      if tok.consumed then err (Token_invalid "already used")
+                      else if
+                        Interview_token.is_expired ~now_ms:now tok.expires_at
+                      then err (Token_invalid "expired")
+                      else
+                        deps.store.get_session tok.session_id >>= function
+                        | None -> err (Token_invalid "unknown session")
+                        | Some session ->
+                            let kind =
+                              let k = String.lowercase_ascii (String.trim kind) in
+                              if k = "domain" then "domain" else "address"
+                            in
+                            let value, expect =
+                              if kind = "domain" then
+                                (session.work_domain, "ban_domain")
+                              else (session.work_email, "ban_address")
+                            in
+                            if tok.kind <> expect then
+                              err (Token_invalid "wrong ban kind")
+                            else
+                              deps.store.consume_token raw >>= fun () ->
+                              deps.store.put_ban
+                                {
+                                  kind;
+                                  value = String.lowercase_ascii value;
+                                  created_at = Interview_clock.iso_of_ms now;
+                                }
+                              >>= fun () -> ok (kind, value))))
 
 let get_resume (deps : deps) = deps.corpus.resume_json
 
@@ -401,15 +699,21 @@ let error_code = function
   | Missing_env _ -> 503
   | Invalid _ -> 400
   | Free_email _ -> 400
+  | Banned _ -> 403
   | Not_found -> 404
   | Token_invalid _ -> 401
+  | Required_incomplete _ -> 409
+  | Hold_cap _ -> 409
 
 let error_name = function
   | Missing_env _ -> "missing_env"
   | Invalid _ -> "invalid"
   | Free_email _ -> "free_email"
+  | Banned _ -> "banned"
   | Not_found -> "not_found"
   | Token_invalid _ -> "token_invalid"
+  | Required_incomplete _ -> "required_incomplete"
+  | Hold_cap _ -> "hold_cap"
 
 let error_json = function
   | Missing_env name ->
@@ -430,10 +734,29 @@ let error_json = function
           ("error", Interview_json.str "free_email");
           ("domain", Interview_json.str domain);
         ]
+  | Banned value ->
+      Interview_json.obj
+        [
+          ("error", Interview_json.str "banned");
+          ("value", Interview_json.str value);
+        ]
   | Not_found -> Interview_json.obj [ ("error", Interview_json.str "not_found") ]
   | Token_invalid msg ->
       Interview_json.obj
         [
           ("error", Interview_json.str "token_invalid");
           ("message", Interview_json.str msg);
+        ]
+  | Required_incomplete missing ->
+      Interview_json.obj
+        [
+          ("error", Interview_json.str "required_incomplete");
+          ( "missing",
+            Interview_json.arr (List.map Interview_json.str missing) );
+        ]
+  | Hold_cap n ->
+      Interview_json.obj
+        [
+          ("error", Interview_json.str "hold_cap");
+          ("cap", Interview_json.num (float_of_int n));
         ]

@@ -18,6 +18,7 @@
   interview_http_fetch
   interview_corpus
   interview_required
+  interview_hold
   interview_config
   interview_mail
   interview_calendar

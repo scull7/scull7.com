@@ -168,9 +168,9 @@ let deps_for request context =
              cfg;
              store = Interview_store.of_config cfg;
              corpus;
-             mail = Interview_mail.of_config cfg;
-             calendar = Interview_calendar.unused ();
-             webhook = Interview_webhook.http ();
+            mail = Interview_mail.of_config cfg;
+            calendar = Interview_calendar.of_config cfg;
+            webhook = Interview_webhook.http ();
            })
 
 let config =

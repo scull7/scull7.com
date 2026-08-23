@@ -1,5 +1,5 @@
-(* OpenAPI 3 contract for T-16/T-17/T-18 surfaces. Named request/response
-   properties, not path-name stubs. *)
+(* OpenAPI 3 contract for T-16 through T-19 surfaces. Named request/response
+   properties, not path-name stubs. Hold request requires start + book_token. *)
 
 let string_prop = Interview_json.obj [ ("type", Interview_json.str "string") ]
 
@@ -40,11 +40,17 @@ let schema_error =
                   Interview_json.str "free_email";
                   Interview_json.str "missing_env";
                   Interview_json.str "token_invalid";
+                  Interview_json.str "required_incomplete";
+                  Interview_json.str "hold_cap";
+                  Interview_json.str "banned";
                 ] );
           ] );
       ("message", string_prop);
       ("name", string_prop);
       ("domain", string_prop);
+      ("missing", string_array_prop);
+      ("cap", Interview_json.obj [ ("type", Interview_json.str "number") ]);
+      ("value", string_prop);
     ]
 
 let session_fields =
@@ -128,6 +134,41 @@ let verify_200 =
       ("expires_at", string_prop);
     ]
 
+let hold_request =
+  object_schema ~required:[ "start"; "book_token" ]
+    [
+      ("start", string_prop);
+      ("book_token", string_prop);
+      ("end", string_prop);
+    ]
+
+let hold_201 =
+  object_schema
+    ~required:
+      [
+        "hold_id";
+        "session_id";
+        "start";
+        "end";
+        "status";
+        "calendar_id";
+        "calendar_event_id";
+      ]
+    [
+      ("hold_id", string_prop);
+      ("session_id", string_prop);
+      ("start", string_prop);
+      ("end", string_prop);
+      ("status", string_prop);
+      ("calendar_id", string_prop);
+      ("calendar_event_id", string_prop);
+      ("html_link", string_prop);
+    ]
+
+let ban_200 =
+  object_schema ~required:[ "banned"; "value" ]
+    [ ("banned", string_prop); ("value", string_prop) ]
+
 let experience_200 =
   object_schema ~required:[ "results" ]
     [
@@ -169,7 +210,8 @@ let document ~site_url =
               Interview_json.str
                 "Recruiter-agent interview of Nathan Sculli: named Turso \
                  sessions, cited Q&A, human work-email magic-link verify, \
-                 resume and experience search. Discover via OpenAPI and MCP." );
+                 tentative calendar hold, resume and experience search. \
+                 Discover via OpenAPI and MCP." );
             ( "contact",
               Interview_json.obj
                 [
@@ -372,6 +414,116 @@ let document ~site_url =
                             ] );
                       ] );
                 ] );
+            ( "/interview/holds",
+              Interview_json.obj
+                [
+                  ( "post",
+                    Interview_json.obj
+                      [
+                        ("operationId", Interview_json.str "createHold");
+                        ( "summary",
+                          Interview_json.str
+                            "Create a tentative Google Calendar hold. \
+                             Book-token only: start + book_token, optional \
+                             end. No session path param." );
+                        ( "requestBody",
+                          Interview_json.obj
+                            [
+                              ("required", Interview_json.bool true);
+                              ("content", json_content hold_request);
+                            ] );
+                        ( "responses",
+                          Interview_json.obj
+                            [
+                              ( "201",
+                                Interview_json.obj
+                                  [
+                                    ( "description",
+                                      Interview_json.str
+                                        "Tentative hold created" );
+                                    ("content", json_content hold_201);
+                                  ] );
+                              ( "400",
+                                Interview_json.obj
+                                  [
+                                    ( "description",
+                                      Interview_json.str "invalid" );
+                                    ("content", json_content schema_error);
+                                  ] );
+                              ( "401",
+                                Interview_json.obj
+                                  [
+                                    ( "description",
+                                      Interview_json.str "token_invalid" );
+                                    ("content", json_content schema_error);
+                                  ] );
+                              ( "409",
+                                Interview_json.obj
+                                  [
+                                    ( "description",
+                                      Interview_json.str
+                                        "required_incomplete or hold_cap" );
+                                    ("content", json_content schema_error);
+                                  ] );
+                              ( "503",
+                                Interview_json.obj
+                                  [
+                                    ( "description",
+                                      Interview_json.str "missing_env" );
+                                    ("content", json_content schema_error);
+                                  ] );
+                            ] );
+                      ] );
+                ] );
+            ( "/interview/ban",
+              Interview_json.obj
+                [
+                  ( "get",
+                    Interview_json.obj
+                      [
+                        ("operationId", Interview_json.str "banWorkIdentity");
+                        ( "summary",
+                          Interview_json.str
+                            "One-click ban of the session work address or \
+                             domain from Nathan's hold-notification mail." );
+                        ( "parameters",
+                          Interview_json.arr
+                            [
+                              Interview_json.obj
+                                [
+                                  ("name", Interview_json.str "kind");
+                                  ("in", Interview_json.str "query");
+                                  ("required", Interview_json.bool true);
+                                  ("schema", string_prop);
+                                ];
+                              Interview_json.obj
+                                [
+                                  ("name", Interview_json.str "token");
+                                  ("in", Interview_json.str "query");
+                                  ("required", Interview_json.bool true);
+                                  ("schema", string_prop);
+                                ];
+                            ] );
+                        ( "responses",
+                          Interview_json.obj
+                            [
+                              ( "200",
+                                Interview_json.obj
+                                  [
+                                    ( "description",
+                                      Interview_json.str "Ban recorded" );
+                                    ("content", json_content ban_200);
+                                  ] );
+                              ( "401",
+                                Interview_json.obj
+                                  [
+                                    ( "description",
+                                      Interview_json.str "token_invalid" );
+                                    ("content", json_content schema_error);
+                                  ] );
+                            ] );
+                      ] );
+                ] );
             ( "/interview/resume",
               Interview_json.obj
                 [
@@ -460,8 +612,8 @@ let document ~site_url =
                           Interview_json.str
                             "MCP JSON-RPC. start_interview, ask_nathan, and \
                              get_resume match HTTP. request_verification \
-                             matches HTTP verify-request. create_hold fail \
-                             closed." );
+                             matches HTTP verify-request. create_hold matches \
+                             HTTP POST /interview/holds." );
                         ( "responses",
                           Interview_json.obj
                             [

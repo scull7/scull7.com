@@ -12,7 +12,7 @@ Use **interview-me** when a recruiter agent needs to start a named session and a
 
 - OpenAPI: https://scull7.com/openapi.json
 - MCP: https://scull7.com/mcp (tools: `start_interview`, `ask_nathan`, `request_verification`, `create_hold`, `get_resume`)
-- HTTP: `POST /interview/sessions`, `POST /interview/sessions/{id}/ask`, `POST /interview/sessions/{id}/verify-request`, `GET /interview/verify?token=`, `GET /interview/resume`, `GET /interview/experience?q=`
+- HTTP: `POST /interview/sessions`, `POST /interview/sessions/{id}/ask`, `POST /interview/sessions/{id}/verify-request`, `GET /interview/verify?token=`, `POST /interview/holds` (start + book_token), `GET /interview/ban?kind=&token=`, `GET /interview/resume`, `GET /interview/experience?q=`
 
 The static resume site is not a generic SaaS console and not a place to provision partner keys. Interview-me is the recruiter-agent product; the homepage is still the resume. Company OAuth, practice mode, and live audio/video are out of scope. Contact remains nathan@vegasbuckeye.com. No street address is published.
 

@@ -24,6 +24,20 @@ type token = {
   created_at : string;
 }
 
+type hold = {
+  id : string;
+  session_id : string;
+  work_domain : string;
+  start_at : string;
+  end_at : string;
+  status : string;
+  calendar_id : string;
+  calendar_event_id : string;
+  created_at : string;
+}
+
+type ban = { kind : string; value : string; created_at : string }
+
 type t = {
   ensure_schema : unit -> unit Js.Promise.t;
   put_session : session -> unit Js.Promise.t;
@@ -31,6 +45,10 @@ type t = {
   put_token : token -> unit Js.Promise.t;
   get_token : string -> token option Js.Promise.t;
   consume_token : string -> unit Js.Promise.t;
+  put_hold : hold -> unit Js.Promise.t;
+  count_active_holds : string -> string -> int Js.Promise.t;
+  put_ban : ban -> unit Js.Promise.t;
+  is_banned : string -> string -> bool Js.Promise.t;
 }
 
 let ( >>= ) p f = Js.Promise.then_ f p
@@ -59,16 +77,40 @@ let schema_sql =
         consumed INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL
       )|};
+    {|CREATE TABLE IF NOT EXISTS interview_holds (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        work_domain TEXT NOT NULL,
+        start_at TEXT NOT NULL,
+        end_at TEXT NOT NULL,
+        status TEXT NOT NULL,
+        calendar_id TEXT NOT NULL,
+        calendar_event_id TEXT,
+        created_at TEXT NOT NULL
+      )|};
+    {|CREATE TABLE IF NOT EXISTS interview_bans (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        value TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )|};
   ]
 
 module Memory = struct
   type tables = {
     sessions : (string, session) Hashtbl.t;
     tokens : (string, token) Hashtbl.t;
+    holds : (string, hold) Hashtbl.t;
+    bans : (string, ban) Hashtbl.t;
   }
 
   let create () =
-    { sessions = Hashtbl.create 16; tokens = Hashtbl.create 16 }
+    {
+      sessions = Hashtbl.create 16;
+      tokens = Hashtbl.create 16;
+      holds = Hashtbl.create 16;
+      bans = Hashtbl.create 16;
+    }
 
   let bind tables : t =
     {
@@ -96,6 +138,33 @@ module Memory = struct
              Hashtbl.replace tables.tokens id { tok with consumed = true }
            with Not_found -> ());
           return ());
+      put_hold =
+        (fun h ->
+          Hashtbl.replace tables.holds h.id h;
+          return ());
+      count_active_holds =
+        (fun domain now_iso ->
+          let n = ref 0 in
+          Hashtbl.iter
+            (fun _ h ->
+              if Interview_hold.is_active ~status:h.status ~end_at:h.end_at
+                   ~now_iso
+                 && h.work_domain = domain
+              then incr n)
+            tables.holds;
+          return !n);
+      put_ban =
+        (fun b ->
+          Hashtbl.replace tables.bans (b.kind ^ ":" ^ b.value) b;
+          return ());
+      is_banned =
+        (fun kind value ->
+          let v = String.lowercase_ascii (String.trim value) in
+          let hit = ref false in
+          Hashtbl.iter
+            (fun _ b -> if b.kind = kind && b.value = v then hit := true)
+            tables.bans;
+          return !hit);
     }
 end
 
@@ -462,6 +531,70 @@ let turso ~url ~token () : t =
               [ arg_text id ];
           ]
         >>= fun _ -> return ());
+    put_hold =
+      (fun h ->
+        ensure () >>= fun () ->
+        post
+          [
+            exec_stmt
+              {|INSERT INTO interview_holds
+                  (id, session_id, work_domain, start_at, end_at, status,
+                   calendar_id, calendar_event_id, created_at)
+                VALUES (?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(id) DO UPDATE SET status=excluded.status|}
+              [
+                arg_text h.id;
+                arg_text h.session_id;
+                arg_text h.work_domain;
+                arg_text h.start_at;
+                arg_text h.end_at;
+                arg_text h.status;
+                arg_text h.calendar_id;
+                arg_text h.calendar_event_id;
+                arg_text h.created_at;
+              ];
+          ]
+        >>= fun _ -> return ());
+    count_active_holds =
+      (fun domain now_iso ->
+        ensure () >>= fun () ->
+        post
+          [
+            exec_stmt
+              {|SELECT COUNT(*) FROM interview_holds
+                 WHERE work_domain = ? AND status = 'tentative' AND end_at > ?|}
+              [ arg_text domain; arg_text now_iso ];
+          ]
+        >>= fun json ->
+        match rows_of_result json with
+        | (n :: _) :: _ -> return (try int_of_string n with _ -> 0)
+        | _ -> return 0);
+    put_ban =
+      (fun b ->
+        ensure () >>= fun () ->
+        post
+          [
+            exec_stmt
+              {|INSERT INTO interview_bans (id, kind, value, created_at)
+                VALUES (?,?,?,?)|}
+              [
+                arg_text (b.kind ^ ":" ^ b.value);
+                arg_text b.kind;
+                arg_text b.value;
+                arg_text b.created_at;
+              ];
+          ]
+        >>= fun _ -> return ());
+    is_banned =
+      (fun kind value ->
+        ensure () >>= fun () ->
+        post
+          [
+            exec_stmt
+              "SELECT id FROM interview_bans WHERE kind = ? AND value = ?"
+              [ arg_text kind; arg_text (String.lowercase_ascii value) ];
+          ]
+        >>= fun json -> return (rows_of_result json <> []));
   }
 
 let unavailable name : t =
@@ -473,6 +606,10 @@ let unavailable name : t =
     put_token = (fun _ -> fail ());
     get_token = (fun _ -> fail ());
     consume_token = (fun _ -> fail ());
+    put_hold = (fun _ -> fail ());
+    count_active_holds = (fun _ _ -> fail ());
+    put_ban = (fun _ -> fail ());
+    is_banned = (fun _ _ -> fail ());
   }
 
 let of_config (cfg : Interview_config.t) =
