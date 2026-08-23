@@ -2048,11 +2048,11 @@ let assert_no_touch ~sent ~created ~hooks ~holds label =
     (label ^ " no interview.completed");
   E2e_ffi.assert_ (Hashtbl.length holds = 0) (label ^ " no hold-cap consume")
 
-let verify_book deps sent id =
+let verify_book deps (sent : Interview_mail.message list ref) id =
   Interview_http.handle deps
     (req "POST" ("/interview/sessions/" ^ id ^ "/verify-request") "")
   >>= fun _ ->
-  let token = harvest_magic_link (List.hd !sent).text in
+  let token = harvest_magic_link (List.hd !sent).Interview_mail.text in
   Interview_http.handle deps
     (req "GET" ("/interview/verify?token=" ^ token) "")
   >>= fun res ->
