@@ -1,9 +1,16 @@
-(* OpenAPI 3 contract for T-16/T-17 surfaces. Named request/response
+(* OpenAPI 3 contract for T-16/T-17/T-18 surfaces. Named request/response
    properties, not path-name stubs. *)
 
 let string_prop = Interview_json.obj [ ("type", Interview_json.str "string") ]
 
 let bool_prop = Interview_json.obj [ ("type", Interview_json.str "boolean") ]
+
+let string_array_prop =
+  Interview_json.obj
+    [
+      ("type", Interview_json.str "array");
+      ("items", string_prop);
+    ]
 
 let object_schema ~required properties =
   Interview_json.obj
@@ -81,11 +88,15 @@ let ask_200 =
         "role";
         "recruiter_name";
         "work_email";
+        "required_progress";
+        "required_remaining";
       ]
     ([
        ("answer", string_prop);
        ("cited", bool_prop);
        ("refused", bool_prop);
+       ("required_progress", string_array_prop);
+       ("required_remaining", string_array_prop);
        ("session_id", string_prop);
        ( "citation",
          object_schema ~required:[ "source"; "path"; "quote" ]

@@ -9,6 +9,8 @@ type session = {
   work_email : string;
   work_domain : string;
   callback_url : string option;
+  hiring_timeline : string option;
+  completed : string list;
   verified : bool;
   created_at : string;
 }
@@ -44,6 +46,8 @@ let schema_sql =
         work_email TEXT NOT NULL,
         work_domain TEXT NOT NULL,
         callback_url TEXT,
+        hiring_timeline TEXT,
+        completed TEXT NOT NULL DEFAULT '[]',
         verified INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL
       )|};
@@ -208,7 +212,29 @@ let rows_of_result json =
       in
       first_rows 0
 
+let completed_of_json raw =
+  try Interview_json.string_list (Interview_json.json_parse raw) with _ -> []
+
+let completed_to_json xs =
+  Interview_json.json_stringify
+    (Interview_json.arr (List.map Interview_json.str xs))
+
 let session_of_row = function
+  | id :: company :: role :: recruiter :: email :: domain :: callback
+    :: timeline :: completed :: verified :: created :: _ ->
+      {
+        id;
+        company;
+        role;
+        recruiter_name = recruiter;
+        work_email = email;
+        work_domain = domain;
+        callback_url = (if callback = "" then None else Some callback);
+        hiring_timeline = (if timeline = "" then None else Some timeline);
+        completed = completed_of_json completed;
+        verified = verified = "1" || verified = "true";
+        created_at = created;
+      }
   | id :: company :: role :: recruiter :: email :: domain :: callback
     :: verified :: created :: _ ->
       {
@@ -219,6 +245,8 @@ let session_of_row = function
         work_email = email;
         work_domain = domain;
         callback_url = (if callback = "" then None else Some callback);
+        hiring_timeline = None;
+        completed = [];
         verified = verified = "1" || verified = "true";
         created_at = created;
       }
@@ -231,6 +259,8 @@ let session_of_row = function
         work_email = "";
         work_domain = "";
         callback_url = None;
+        hiring_timeline = None;
+        completed = [];
         verified = false;
         created_at = "";
       }
@@ -306,10 +336,27 @@ let turso ~url ~token () : t =
       | Some msg -> Js.Promise.reject (Failure ("turso: " ^ msg))
       | None -> return json
   in
+  let migrate () =
+    let alters =
+      [
+        "ALTER TABLE interview_sessions ADD COLUMN hiring_timeline TEXT";
+        "ALTER TABLE interview_sessions ADD COLUMN completed TEXT";
+      ]
+    in
+    let rec loop = function
+      | [] -> return ()
+      | sql :: rest ->
+          post [ exec_stmt sql [] ]
+          |> Js.Promise.then_ (fun _ -> loop rest)
+          |> Js.Promise.catch (fun _ -> loop rest)
+    in
+    loop alters
+  in
   let ensure () =
     if !ready then return ()
     else
       post (List.map (fun sql -> exec_stmt sql []) schema_sql) >>= fun _ ->
+      migrate () >>= fun () ->
       ready := true;
       return ()
   in
@@ -323,13 +370,15 @@ let turso ~url ~token () : t =
             exec_stmt
               {|INSERT INTO interview_sessions
                   (id, company, role, recruiter_name, work_email, work_domain,
-                   callback_url, verified, created_at)
-                VALUES (?,?,?,?,?,?,?,?,?)
+                   callback_url, hiring_timeline, completed, verified, created_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(id) DO UPDATE SET
                   company=excluded.company, role=excluded.role,
                   recruiter_name=excluded.recruiter_name,
                   work_email=excluded.work_email, work_domain=excluded.work_domain,
-                  callback_url=excluded.callback_url, verified=excluded.verified|}
+                  callback_url=excluded.callback_url,
+                  hiring_timeline=excluded.hiring_timeline,
+                  completed=excluded.completed, verified=excluded.verified|}
               [
                 arg_text s.id;
                 arg_text s.company;
@@ -340,6 +389,10 @@ let turso ~url ~token () : t =
                 (match s.callback_url with
                 | Some u -> arg_text u
                 | None -> arg_null);
+                (match s.hiring_timeline with
+                | Some t -> arg_text t
+                | None -> arg_null);
+                arg_text (completed_to_json s.completed);
                 arg_int (if s.verified then 1 else 0);
                 arg_text s.created_at;
               ];
@@ -352,7 +405,7 @@ let turso ~url ~token () : t =
           [
             exec_stmt
               {|SELECT id, company, role, recruiter_name, work_email, work_domain,
-                       callback_url, verified, created_at
+                       callback_url, hiring_timeline, completed, verified, created_at
                   FROM interview_sessions WHERE id = ?|}
               [ arg_text id ];
           ]

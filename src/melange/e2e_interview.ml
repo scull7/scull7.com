@@ -1,6 +1,6 @@
-(* T-16 + T-17 proofs: named Turso session, cited Q&A, human magic-link
-   verify / book token, resume/experience, OpenAPI + MCP + llms.txt.
-   Each AC has an inversion. *)
+(* T-16 + T-17 + T-18 proofs: named Turso session, cited Q&A, required-set
+   progress, interview.completed once, human magic-link verify / book
+   token, resume/experience, OpenAPI + MCP + llms.txt. Each AC inverts. *)
 
 let ( >>= ) p f = Js.Promise.then_ f p
 let return x = Js.Promise.resolve x
@@ -84,7 +84,7 @@ let test_corpus () =
   Interview_corpus.of_pages ~resume_json:(load_resume ())
     [ ("/about.md", about) ]
 
-let memory_harness ?cfg ?now_ms ?store () =
+let memory_full ?cfg ?now_ms ?store ?webhook () =
   let cfg = match cfg with Some c -> c | None -> test_cfg [] in
   let store =
     match store with
@@ -93,6 +93,11 @@ let memory_harness ?cfg ?now_ms ?store () =
   in
   let mail, sent = Interview_mail.capture () in
   let calendar, created = Interview_calendar.capture () in
+  let webhook, hooks =
+    match webhook with
+    | Some (w, h) -> (w, h)
+    | None -> Interview_webhook.capture ()
+  in
   ( {
       Interview_service.now_ms =
         (match now_ms with Some f -> f | None -> Interview_clock.now_ms);
@@ -102,12 +107,18 @@ let memory_harness ?cfg ?now_ms ?store () =
       corpus = test_corpus ();
       mail;
       calendar;
+      webhook;
     },
     sent,
-    created )
+    created,
+    hooks )
+
+let memory_harness ?cfg ?now_ms ?store () =
+  let deps, sent, created, _ = memory_full ?cfg ?now_ms ?store () in
+  (deps, sent, created)
 
 let memory_deps ?cfg ?now_ms () =
-  let deps, _, _ = memory_harness ?cfg ?now_ms () in
+  let deps, _, _, _ = memory_full ?cfg ?now_ms () in
   deps
 
 let json_body res =
@@ -389,6 +400,7 @@ let turso_deps ?now_ms url token =
   in
   let mail, sent = Interview_mail.capture () in
   let calendar, created = Interview_calendar.capture () in
+  let webhook, _hooks = Interview_webhook.capture () in
   ( {
       Interview_service.now_ms =
         (match now_ms with Some f -> f | None -> Interview_clock.now_ms);
@@ -398,6 +410,7 @@ let turso_deps ?now_ms url token =
       corpus = test_corpus ();
       mail;
       calendar;
+      webhook;
     },
     sent,
     created )
@@ -971,6 +984,8 @@ let prove_openapi_named () =
           "role";
           "recruiter_name";
           "work_email";
+          "required_progress";
+          "required_remaining";
         ];
       let exp_200 =
         response_schema paths "/interview/experience" "get" "200"
@@ -1139,6 +1154,8 @@ let prove_missing_turso_env () =
       work_email = "pat@acme.example";
       work_domain = "acme.example";
       callback_url = None;
+      hiring_timeline = None;
+      completed = [];
       verified = false;
       created_at = "2026-08-23T00:00:00.000Z";
     }
@@ -1176,9 +1193,9 @@ let mcp_structured text =
           Interview_json.as_object
             (Interview_json.field result "structuredContent"))
 
-let start_session deps ?(email = "recruiter@acme.example") () =
+let start_session deps ?(email = "recruiter@acme.example") ?callback () =
   Interview_http.handle deps
-    (req "POST" "/interview/sessions" (start_body ~email ()))
+    (req "POST" "/interview/sessions" (start_body ~email ?callback ()))
   >>= fun res ->
   json_body res >>= fun (text, obj) ->
   match obj with
@@ -1597,6 +1614,371 @@ let prove_t17_contact_no_street () =
   E2e_ffi.pass "T-17 AC9 contact + no street + agent has no inbox";
   return ()
 
+let string_list_field dict key =
+  Interview_json.as_array (Interview_json.field dict key)
+  |> Array.to_list
+  |> List.map Interview_json.as_string
+
+let default_required =
+  [
+    "current_work";
+    "leadership";
+    "systems";
+    "wants_next";
+    "hiring_timeline";
+  ]
+
+let q_current = "What is Nathan doing at TensorWave on Relay?"
+let q_leadership = "What leadership scale has Nathan managed?"
+let q_systems =
+  "What systems depth does Nathan have in Rust and distributed systems?"
+let q_wants = "What does Nathan want next?"
+let q_refuse = "What is Nathan's unpublished salary?"
+let q_timeline =
+  "Our hiring timeline is we need someone by 12 October 2026."
+let q_timeline_echo =
+  "What hiring timeline did we record for this session?"
+let q_invented = "What invented next role is Nathan taking at FakeCorp?"
+
+let ask_q deps id q =
+  Interview_http.handle deps
+    (req "POST" ("/interview/sessions/" ^ id ^ "/ask")
+       (Interview_json.json_stringify
+          (Interview_json.obj [ ("question", Interview_json.str q) ])))
+
+let ask_dict deps id q =
+  ask_q deps id q >>= fun res ->
+  json_body res >>= fun (text, obj) ->
+  match obj with
+  | Some dict -> return (response_status res, text, dict)
+  | None -> failwith ("ask body: " ^ text)
+
+let assert_ids label expected actual =
+  E2e_ffi.assert_
+    (expected = actual)
+    (label ^ " expected [" ^ String.concat "," expected ^ "] got ["
+   ^ String.concat "," actual ^ "]")
+
+let has_id xs id = List.exists (fun x -> x = id) xs
+
+let assert_no_booking hooks label =
+  List.iter
+    (fun (s : Interview_webhook.sent) ->
+      E2e_ffi.assert_
+        (not (Js.String.includes ~search:"booking.requested" s.body))
+        (label ^ " must not send booking.requested"))
+    !hooks
+
+let webhook_event_names hooks =
+  List.rev !hooks
+  |> List.map (fun (s : Interview_webhook.sent) ->
+         match Interview_json.parse_object s.body with
+         | None -> ""
+         | Some dict -> Interview_json.string_field dict "event")
+
+let complete_four deps id =
+  ask_dict deps id q_current >>= fun _ ->
+  ask_dict deps id q_leadership >>= fun _ ->
+  ask_dict deps id q_systems >>= fun _ ->
+  ask_dict deps id q_wants
+
+(* T-18 AC1 *)
+let prove_t18_progress_fields_and_refuse () =
+  let deps, _, created, hooks = memory_full () in
+  start_session deps () >>= fun (id, _) ->
+  ask_dict deps id q_refuse >>= fun (status, _text, first) ->
+  E2e_ffi.assert_ (status = 200) "T-18 AC1 first ask 200";
+  assert_ids "T-18 AC1 first progress empty" []
+    (string_list_field first "required_progress");
+  assert_ids "T-18 AC1 default remaining"
+    default_required
+    (string_list_field first "required_remaining");
+  ask_dict deps id q_current >>= fun (_, _, cited) ->
+  assert_ids "T-18 AC1 cited progress" [ "current_work" ]
+    (string_list_field cited "required_progress");
+  assert_ids "T-18 AC1 cited remaining"
+    [ "leadership"; "systems"; "wants_next"; "hiring_timeline" ]
+    (string_list_field cited "required_remaining");
+  ask_dict deps id q_refuse >>= fun (_, _, refuse_dict) ->
+  E2e_ffi.assert_
+    (Interview_json.as_bool (Interview_json.field refuse_dict "refused"))
+    "T-18 AC1 refuse";
+  assert_ids "T-18 AC1 refuse does not add progress" [ "current_work" ]
+    (string_list_field refuse_dict "required_progress");
+  assert_ids "T-18 AC1 refuse does not shrink remaining"
+    [ "leadership"; "systems"; "wants_next"; "hiring_timeline" ]
+    (string_list_field refuse_dict "required_remaining");
+  E2e_ffi.assert_ (!hooks = []) "T-18 AC1 refuse sends no webhook";
+  E2e_ffi.assert_ (!created = []) "T-18 AC1 no calendar hold";
+  E2e_ffi.pass "T-18 AC1 ask JSON progress/remaining; refuse is a no-op";
+  return ()
+
+(* T-18 AC2 *)
+let prove_t18_complete_once () =
+  let deps, _, created, hooks =
+    memory_full
+      ~webhook:
+        (let w, h = Interview_webhook.capture () in
+         (w, h))
+      ()
+  in
+  start_session deps ~callback:"https://hooks.example/complete" ()
+  >>= fun (id, _) ->
+  complete_four deps id >>= fun _ ->
+  ask_dict deps id q_timeline >>= fun (_, _, dict) ->
+  assert_ids "T-18 AC2 remaining empty on complete" []
+    (string_list_field dict "required_remaining");
+  let progress = string_list_field dict "required_progress" in
+  List.iter
+    (fun id ->
+      E2e_ffi.assert_ (has_id progress id) ("T-18 AC2 progress has " ^ id))
+    default_required;
+  E2e_ffi.assert_
+    (List.length progress = 5)
+    "T-18 AC2 progress is five unique ids";
+  E2e_ffi.assert_ (List.length !hooks = 1) "T-18 AC2 webhook once on complete";
+  E2e_ffi.assert_
+    (webhook_event_names hooks = [ "interview.completed" ])
+    "T-18 AC2 event is interview.completed";
+  ask_dict deps id q_current >>= fun (_, _, later) ->
+  assert_ids "T-18 AC2 later remaining still empty" []
+    (string_list_field later "required_remaining");
+  E2e_ffi.assert_
+    (List.length (string_list_field later "required_progress") = 5)
+    "T-18 AC2 later progress not duplicated";
+  E2e_ffi.assert_
+    (List.length !hooks = 1)
+    "T-18 AC2 later ask does not mark complete a second time";
+  assert_no_booking hooks "T-18 AC2";
+  E2e_ffi.assert_ (!created = []) "T-18 AC2 no calendar hold";
+  E2e_ffi.pass "T-18 AC2 set completes once; later ask does not re-complete";
+  return ()
+
+(* T-18 AC3 *)
+let prove_t18_four_cited_not_complete () =
+  let deps, _, _, hooks = memory_full () in
+  start_session deps ~callback:"https://hooks.example/four" () >>= fun (id, _) ->
+  complete_four deps id >>= fun (_, _, dict) ->
+  let remaining = string_list_field dict "required_remaining" in
+  E2e_ffi.assert_
+    (has_id remaining "hiring_timeline")
+    "T-18 AC3 remaining still includes hiring_timeline";
+  E2e_ffi.assert_ (remaining <> []) "T-18 AC3 not complete";
+  E2e_ffi.assert_ (!hooks = []) "T-18 AC3 interview.completed not sent";
+  assert_no_booking hooks "T-18 AC3";
+  E2e_ffi.pass "T-18 AC3 four cited without timeline is not complete";
+  return ()
+
+(* T-18 AC4 *)
+let prove_t18_timeline_alone_not_complete () =
+  let deps, _, _, hooks = memory_full () in
+  start_session deps ~callback:"https://hooks.example/timeline" ()
+  >>= fun (id, _) ->
+  ask_dict deps id q_timeline >>= fun (_, _, dict) ->
+  let remaining = string_list_field dict "required_remaining" in
+  List.iter
+    (fun id ->
+      E2e_ffi.assert_
+        (has_id remaining id)
+        ("T-18 AC4 remaining still includes " ^ id))
+    [ "current_work"; "leadership"; "systems"; "wants_next" ];
+  E2e_ffi.assert_ (remaining <> []) "T-18 AC4 not complete";
+  E2e_ffi.assert_
+    (not (has_id remaining "hiring_timeline"))
+    "T-18 AC4 timeline itself is completed";
+  E2e_ffi.assert_ (!hooks = []) "T-18 AC4 interview.completed not sent";
+  assert_no_booking hooks "T-18 AC4";
+  E2e_ffi.pass "T-18 AC4 timeline alone is not complete";
+  return ()
+
+(* T-18 AC5 *)
+let prove_t18_hiring_timeline_recruiter_fact () =
+  let deps, _, _, _ = memory_full () in
+  start_session deps () >>= fun (id, _) ->
+  ask_dict deps id q_timeline >>= fun (_, text, dict) ->
+  E2e_ffi.assert_
+    (not (Interview_json.as_bool (Interview_json.field dict "cited")))
+    "T-18 AC5 recording cited false";
+  E2e_ffi.assert_
+    (not (Interview_json.as_bool (Interview_json.field dict "refused")))
+    "T-18 AC5 recording is not a refusal";
+  (match Interview_json.as_object (Interview_json.field dict "citation") with
+  | None -> ()
+  | Some c ->
+      let source = Interview_json.string_field c "source" in
+      failwith
+        ("T-18 AC5 recording must not be a resume/page citation, got " ^ source));
+  E2e_ffi.assert_
+    (Js.String.includes ~search:"12 October 2026" text
+    && Js.String.includes ~search:"we need someone" text)
+    "T-18 AC5 recording answer contains their words";
+  E2e_ffi.assert_
+    (not
+       (Js.String.includes ~search:"/resume.json" text
+       && Js.String.includes ~search:"12 October 2026" text
+          && Js.String.includes ~search:"Source: /resume.json" text))
+    "T-18 AC5 recording is not a resume citation";
+  ask_dict deps id q_timeline_echo >>= fun (_, echo_text, echo) ->
+  E2e_ffi.assert_
+    (not (Interview_json.as_bool (Interview_json.field echo "cited")))
+    "T-18 AC5 echo cited false";
+  E2e_ffi.assert_
+    (Js.String.includes ~search:"12 October 2026" echo_text
+    && Js.String.includes ~search:"we need someone" echo_text)
+    "T-18 AC5 later ask echoes hiring_timeline with their words";
+  ask_dict deps id q_invented >>= fun (_, invented_text, invented) ->
+  E2e_ffi.assert_
+    (Interview_json.as_bool (Interview_json.field invented "refused"))
+    "T-18 AC5 invented career fact is refused";
+  E2e_ffi.assert_
+    (not
+       (Js.String.includes ~search:"FakeCorp" invented_text
+       && not (Js.String.includes ~search:"refused" invented_text)))
+    "T-18 AC5 does not invent a career fact";
+  E2e_ffi.pass "T-18 AC5 hiring timeline is recruiter fact, not a citation";
+  return ()
+
+(* T-18 AC6 *)
+let prove_t18_required_set_configurable () =
+  let csv_cfg =
+    test_cfg [ env "INTERVIEW_REQUIRED_QUESTIONS" "current_work,hiring_timeline" ]
+  in
+  let deps_csv, _, _, _ = memory_full ~cfg:csv_cfg () in
+  start_session deps_csv () >>= fun (id, _) ->
+  ask_dict deps_csv id q_refuse >>= fun (_, _, first) ->
+  assert_ids "T-18 AC6 CSV first-ask remaining"
+    [ "current_work"; "hiring_timeline" ]
+    (string_list_field first "required_remaining");
+  ask_dict deps_csv id q_current >>= fun _ ->
+  ask_dict deps_csv id q_timeline >>= fun (_, _, done_) ->
+  assert_ids "T-18 AC6 CSV complete remaining" []
+    (string_list_field done_ "required_remaining");
+  let json_cfg =
+    test_cfg
+      [
+        env "INTERVIEW_REQUIRED_QUESTIONS"
+          "[\"current_work\",\"hiring_timeline\"]";
+      ]
+  in
+  let deps_json, _, _, _ = memory_full ~cfg:json_cfg () in
+  start_session deps_json () >>= fun (idj, _) ->
+  ask_dict deps_json idj q_refuse >>= fun (_, _, jfirst) ->
+  assert_ids "T-18 AC6 JSON array first-ask remaining"
+    [ "current_work"; "hiring_timeline" ]
+    (string_list_field jfirst "required_remaining");
+  let empty_cfg = test_cfg [ env "INTERVIEW_REQUIRED_QUESTIONS" "" ] in
+  E2e_ffi.assert_
+    (Interview_config.required_ids empty_cfg = default_required)
+    "T-18 AC6 empty restores five";
+  let unset_cfg = test_cfg [] in
+  E2e_ffi.assert_
+    (Interview_config.required_ids unset_cfg = default_required)
+    "T-18 AC6 unset restores five";
+  let deps_unset, _, _, _ = memory_full ~cfg:unset_cfg () in
+  start_session deps_unset () >>= fun (idu, _) ->
+  ask_dict deps_unset idu q_refuse >>= fun (_, _, ufirst) ->
+  assert_ids "T-18 AC6 unset first-ask remaining" default_required
+    (string_list_field ufirst "required_remaining");
+  E2e_ffi.pass "T-18 AC6 INTERVIEW_REQUIRED_QUESTIONS CSV/JSON/empty/unset";
+  return ()
+
+(* T-18 AC7 *)
+let prove_t18_webhook_once_or_absent () =
+  let deps, _, created, hooks = memory_full () in
+  start_session deps ~callback:"https://hooks.example/interview" ()
+  >>= fun (id, _) ->
+  complete_four deps id >>= fun _ ->
+  ask_dict deps id q_timeline >>= fun _ ->
+  E2e_ffi.assert_ (List.length !hooks = 1) "T-18 AC7 exactly one webhook";
+  let hook = List.hd !hooks in
+  E2e_ffi.assert_
+    (hook.url = "https://hooks.example/interview")
+    "T-18 AC7 POST goes to callback_url";
+  E2e_ffi.assert_
+    (webhook_event_names hooks = [ "interview.completed" ])
+    "T-18 AC7 event interview.completed";
+  E2e_ffi.assert_
+    (Js.String.includes ~search:"interview.completed" hook.body)
+    "T-18 AC7 body names interview.completed";
+  assert_no_booking hooks "T-18 AC7";
+  ask_dict deps id q_wants >>= fun _ ->
+  E2e_ffi.assert_ (List.length !hooks = 1) "T-18 AC7 later ask no second POST";
+  E2e_ffi.assert_ (!created = []) "T-18 AC7 no calendar hold";
+  let deps2, _, _, hooks2 = memory_full () in
+  start_session deps2 () >>= fun (id2, _) ->
+  complete_four deps2 id2 >>= fun _ ->
+  ask_dict deps2 id2 q_timeline >>= fun (_, _, dict2) ->
+  assert_ids "T-18 AC7 no callback still complete" []
+    (string_list_field dict2 "required_remaining");
+  E2e_ffi.assert_ (!hooks2 = []) "T-18 AC7 no callback_url means no webhook";
+  E2e_ffi.pass "T-18 AC7 interview.completed once iff callback_url";
+  return ()
+
+(* T-18 AC8 *)
+let prove_t18_webhook_failure_does_not_rollback () =
+  let wh, hooks = Interview_webhook.capture_failing () in
+  let deps, _, _, _ = memory_full ~webhook:(wh, hooks) () in
+  start_session deps ~callback:"https://hooks.example/fail" () >>= fun (id, _) ->
+  complete_four deps id >>= fun _ ->
+  ask_dict deps id q_timeline >>= fun (status, _, dict) ->
+  E2e_ffi.assert_ (status = 200) "T-18 AC8 completing ask succeeds";
+  assert_ids "T-18 AC8 remaining empty despite webhook fail" []
+    (string_list_field dict "required_remaining");
+  E2e_ffi.assert_ (List.length !hooks = 1) "T-18 AC8 POST was attempted";
+  ask_dict deps id q_leadership >>= fun (_, _, later) ->
+  assert_ids "T-18 AC8 completeness not rolled back" []
+    (string_list_field later "required_remaining");
+  E2e_ffi.assert_
+    (List.length (string_list_field later "required_progress") = 5)
+    "T-18 AC8 later progress still complete";
+  E2e_ffi.assert_
+    (List.length !hooks = 1)
+    "T-18 AC8 failed POST is not retried as a second complete";
+  assert_no_booking hooks "T-18 AC8";
+  E2e_ffi.pass "T-18 AC8 webhook failure does not roll back completeness";
+  return ()
+
+(* T-18 AC9 *)
+let prove_t18_no_hold_or_verify () =
+  let deps, sent, created, hooks = memory_full () in
+  start_session deps ~callback:"https://hooks.example/nohold" ()
+  >>= fun (id, _) ->
+  complete_four deps id >>= fun _ ->
+  ask_dict deps id q_timeline >>= fun (status, text, dict) ->
+  E2e_ffi.assert_ (status = 200) "T-18 AC9 completing ask needs no verify";
+  assert_ids "T-18 AC9 set complete without book token" []
+    (string_list_field dict "required_remaining");
+  E2e_ffi.assert_
+    (not
+       (Js.String.includes ~search:"book_token" text
+       || Js.String.includes ~search:"hold_id" text
+       || Js.String.includes ~search:"calendar_event_id" text))
+    "T-18 AC9 ask is not a hold and issues no book token";
+  E2e_ffi.assert_ (!sent = []) "T-18 AC9 no hold mail";
+  E2e_ffi.assert_ (!created = []) "T-18 AC9 calendar action never called";
+  Interview_http.handle deps
+    (req "POST" "/mcp"
+       (mcp_call "create_hold"
+          (Interview_json.obj
+             [
+               ("start", Interview_json.str "2026-09-01T17:00:00.000Z");
+               ("book_token", Interview_json.str "not-a-token");
+             ])))
+  >>= fun hold ->
+  response_text hold >>= fun hold_text ->
+  E2e_ffi.assert_
+    (Js.String.includes ~search:"\"error\"" hold_text)
+    "T-18 AC9 create_hold stays fail-closed";
+  E2e_ffi.assert_
+    (not
+       (Js.String.includes ~search:"hold_id" hold_text
+       || Js.String.includes ~search:"calendar_event_id" hold_text))
+    "T-18 AC9 create_hold creates no calendar event";
+  E2e_ffi.assert_ (!created = []) "T-18 AC9 create_hold never called calendar";
+  assert_no_booking hooks "T-18 AC9";
+  E2e_ffi.pass "T-18 AC9 no create_hold, verify, book token, GCal, or hold mail";
+  return ()
+
 let prove_function_bundle () =
   let interview_js =
     Node.Path.join [| E2e_ffi.root; "netlify/functions/interview.js" |]
@@ -1656,6 +2038,15 @@ let run () =
   >>= (fun () -> prove_t17_qa_before_after_no_hold ())
   >>= (fun () -> prove_t17_missing_env_no_token ())
   >>= (fun () -> prove_t17_contact_no_street ())
+  >>= (fun () -> prove_t18_progress_fields_and_refuse ())
+  >>= (fun () -> prove_t18_complete_once ())
+  >>= (fun () -> prove_t18_four_cited_not_complete ())
+  >>= (fun () -> prove_t18_timeline_alone_not_complete ())
+  >>= (fun () -> prove_t18_hiring_timeline_recruiter_fact ())
+  >>= (fun () -> prove_t18_required_set_configurable ())
+  >>= (fun () -> prove_t18_webhook_once_or_absent ())
+  >>= (fun () -> prove_t18_webhook_failure_does_not_rollback ())
+  >>= (fun () -> prove_t18_no_hold_or_verify ())
   >>= (fun () ->
          E2e_ffi.console_log "e2e/interview PASS";
          finish 0;

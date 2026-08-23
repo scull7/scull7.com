@@ -170,6 +170,7 @@ let deps_for request context =
              corpus;
              mail = Interview_mail.of_config cfg;
              calendar = Interview_calendar.unused ();
+             webhook = Interview_webhook.http ();
            })
 
 let config =
