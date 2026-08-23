@@ -7,6 +7,24 @@
  (preprocess
   (pps melange.ppx)))
 
+(library
+ (name interview)
+ (modes melange)
+ (wrapped false)
+ (modules
+  interview_json
+  interview_config
+  interview_clock
+  interview_http_fetch
+  interview_corpus
+  interview_store
+  interview_service
+  interview_openapi
+  interview_http)
+ (libraries melange.js)
+ (preprocess
+  (pps melange.ppx)))
+
 (melange.emit
  (target output)
  (alias site)
@@ -45,10 +63,19 @@
  (module_systems es6))
 
 (melange.emit
+ (target functions)
+ (alias site)
+ (modules interview_fn)
+ (libraries interview melange.js melange.node)
+ (preprocess
+  (pps melange.ppx))
+ (module_systems es6))
+
+(melange.emit
  (target e2e)
  (alias site)
- (modules e2e_ffi e2e_agentic e2e_navigation e2e_run e2e_t13 e2e_cli)
- (libraries negotiate melange.js melange.node)
+ (modules e2e_ffi e2e_agentic e2e_navigation e2e_run e2e_t13 e2e_interview e2e_cli)
+ (libraries negotiate interview melange.js melange.node)
  (preprocess
   (pps melange.ppx))
  (module_systems

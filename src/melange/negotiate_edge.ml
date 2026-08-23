@@ -82,7 +82,17 @@ let config =
   [%mel.obj
     {
       path = "/*";
-      excludedPath = [| "/assets/*"; "/styles/*"; "/og.png"; "/og.svg" |];
+      excludedPath =
+        [|
+          "/assets/*";
+          "/styles/*";
+          "/og.png";
+          "/og.svg";
+          "/openapi.json";
+          "/mcp";
+          "/interview";
+          "/interview/*";
+        |];
     }]
 
 let default =
@@ -94,7 +104,14 @@ let default =
       if meth <> "GET" && meth <> "HEAD" then context_next context
       else
         let url = new_url (request_url request) in
-        let last = last_segment (url_pathname url) in
+        let pathname = url_pathname url in
+        if
+          pathname = "/mcp"
+          || pathname = "/openapi.json"
+          || String.starts_with ~prefix:"/interview" pathname
+        then context_next context
+        else
+        let last = last_segment pathname in
         if String.contains last '.' then context_next context
         else
           let accept = header_get (request_headers request) "accept" in

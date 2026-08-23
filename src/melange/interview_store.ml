@@ -1,0 +1,318 @@
+(* Session persistence. Production is Turso (libSQL HTTP) only.
+   Tests may inject Memory.bind; of_config never honors INTERVIEW_STORE=memory. *)
+
+type session = {
+  id : string;
+  company : string;
+  role : string;
+  recruiter_name : string;
+  work_email : string;
+  work_domain : string;
+  callback_url : string option;
+  verified : bool;
+  created_at : string;
+}
+
+type t = {
+  ensure_schema : unit -> unit Js.Promise.t;
+  put_session : session -> unit Js.Promise.t;
+  get_session : string -> session option Js.Promise.t;
+}
+
+let ( >>= ) p f = Js.Promise.then_ f p
+let return x = Js.Promise.resolve x
+
+let schema_sql =
+  {|CREATE TABLE IF NOT EXISTS interview_sessions (
+        id TEXT PRIMARY KEY,
+        company TEXT NOT NULL,
+        role TEXT NOT NULL,
+        recruiter_name TEXT NOT NULL,
+        work_email TEXT NOT NULL,
+        work_domain TEXT NOT NULL,
+        callback_url TEXT,
+        verified INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )|}
+
+module Memory = struct
+  type tables = { sessions : (string, session) Hashtbl.t }
+
+  let create () = { sessions = Hashtbl.create 16 }
+
+  let bind tables : t =
+    {
+      ensure_schema = (fun () -> return ());
+      put_session =
+        (fun s ->
+          Hashtbl.replace tables.sessions s.id s;
+          return ());
+      get_session =
+        (fun id ->
+          return
+            (try Some (Hashtbl.find tables.sessions id) with Not_found -> None));
+    }
+end
+
+external js_message : 'a -> string Js.undefined = "message" [@@mel.get]
+external js_payload : 'a -> string Js.undefined = "_1" [@@mel.get]
+external js_cause : 'a -> 'a Js.undefined = "cause" [@@mel.get]
+
+let useful = function
+  | Some s when String.trim s <> "" && s <> "Failure" && s <> "Error" ->
+      Some (String.trim s)
+  | _ -> None
+
+let rec peek_exn err depth =
+  if depth > 3 then None
+  else
+    match useful (Js.Undefined.toOption (js_payload err)) with
+    | Some s -> Some s
+    | None -> (
+        match useful (Js.Undefined.toOption (js_message err)) with
+        | Some s -> Some s
+        | None -> (
+            match Js.Undefined.toOption (js_cause err) with
+            | Some c -> peek_exn c (depth + 1)
+            | None -> None))
+
+let js_err_message err =
+  match peek_exn err 0 with Some s -> s | None -> "fetch failed"
+
+let strip_slash u =
+  if String.ends_with ~suffix:"/" u && String.length u > 1 then
+    String.sub u 0 (String.length u - 1)
+  else u
+
+let http_url raw =
+  let u = String.trim raw in
+  let u =
+    if String.starts_with ~prefix:"libsql://" u then
+      "https://" ^ String.sub u 9 (String.length u - 9)
+    else if String.starts_with ~prefix:"https://" u then u
+    else if String.starts_with ~prefix:"http://" u then u
+    else "https://" ^ u
+  in
+  strip_slash u
+
+let pipeline_url raw =
+  let u = http_url raw in
+  if String.ends_with ~suffix:"/v2/pipeline" u then u else u ^ "/v2/pipeline"
+
+let arg_text v =
+  Interview_json.obj
+    [ ("type", Interview_json.str "text"); ("value", Interview_json.str v) ]
+
+let arg_int n =
+  Interview_json.obj
+    [
+      ("type", Interview_json.str "integer");
+      ("value", Interview_json.str (string_of_int n));
+    ]
+
+let arg_null = Interview_json.obj [ ("type", Interview_json.str "null") ]
+
+let exec_stmt sql args =
+  Interview_json.obj
+    [
+      ("type", Interview_json.str "execute");
+      ( "stmt",
+        Interview_json.obj
+          [ ("sql", Interview_json.str sql); ("args", Interview_json.arr args) ]
+      );
+    ]
+
+let pipeline_body stmts =
+  Interview_json.obj
+    [
+      ("baton", Interview_json.null);
+      ( "requests",
+        Interview_json.arr
+          (stmts @ [ Interview_json.obj [ ("type", Interview_json.str "close") ] ])
+      );
+    ]
+
+let cell_string json =
+  match Interview_json.as_object json with
+  | None -> Interview_json.as_string json
+  | Some dict -> (
+      match Interview_json.opt_string_field dict "value" with
+      | Some v -> v
+      | None -> Interview_json.as_string json)
+
+let rows_of_result json =
+  match Interview_json.as_object json with
+  | None -> []
+  | Some root ->
+      let results =
+        Interview_json.as_array (Interview_json.field root "results")
+      in
+      let rec first_rows i =
+        if i >= Array.length results then []
+        else
+          match Interview_json.as_object results.(i) with
+          | None -> first_rows (i + 1)
+          | Some item ->
+              let resp = Interview_json.object_field item "response" in
+              let result = Interview_json.object_field resp "result" in
+              let rows =
+                Interview_json.as_array (Interview_json.field result "rows")
+              in
+              if Array.length rows = 0 then first_rows (i + 1)
+              else
+                rows |> Array.to_list
+                |> List.map (fun row ->
+                       Interview_json.as_array row
+                       |> Array.to_list |> List.map cell_string)
+      in
+      first_rows 0
+
+let session_of_row = function
+  | id :: company :: role :: recruiter :: email :: domain :: callback
+    :: verified :: created :: _ ->
+      {
+        id;
+        company;
+        role;
+        recruiter_name = recruiter;
+        work_email = email;
+        work_domain = domain;
+        callback_url = (if callback = "" then None else Some callback);
+        verified = verified = "1" || verified = "true";
+        created_at = created;
+      }
+  | _ ->
+      {
+        id = "";
+        company = "";
+        role = "";
+        recruiter_name = "";
+        work_email = "";
+        work_domain = "";
+        callback_url = None;
+        verified = false;
+        created_at = "";
+      }
+
+let clip_body body =
+  let t = String.trim body in
+  if String.length t <= 300 then t else String.sub t 0 297 ^ "..."
+
+let pipeline_error json =
+  match Interview_json.as_object json with
+  | None -> None
+  | Some root ->
+      let results =
+        Interview_json.as_array (Interview_json.field root "results")
+      in
+      let rec loop i =
+        if i >= Array.length results then None
+        else
+          match Interview_json.as_object results.(i) with
+          | Some item when Interview_json.string_field item "type" = "error" ->
+              let e = Interview_json.object_field item "error" in
+              let msg = Interview_json.string_field e "message" in
+              Some (if msg = "" then "pipeline error" else msg)
+          | _ -> loop (i + 1)
+      in
+      loop 0
+
+let turso ~url ~token () : t =
+  let endpoint = pipeline_url url in
+  let ready = ref false in
+  let post stmts =
+    let headers = Js.Dict.empty () in
+    Js.Dict.set headers "Authorization" ("Bearer " ^ token);
+    Js.Dict.set headers "Content-Type" "application/json";
+    Interview_http_fetch.post endpoint ~headers
+      ~body:(Interview_json.json_stringify (pipeline_body stmts))
+    |> Js.Promise.catch (fun e ->
+           Js.Promise.reject
+             (Failure ("turso fetch failed: " ^ js_err_message e)))
+    >>= fun res ->
+    Interview_http_fetch.response_text res >>= fun body ->
+    if not (Interview_http_fetch.response_ok res) then
+      Js.Promise.reject
+        (Failure
+           ("turso "
+           ^ string_of_int (Interview_http_fetch.response_status res)
+           ^ ": " ^ clip_body body))
+    else
+      let json =
+        try Interview_json.json_parse body with _ -> Interview_json.null
+      in
+      match pipeline_error json with
+      | Some msg -> Js.Promise.reject (Failure ("turso: " ^ msg))
+      | None -> return json
+  in
+  let ensure () =
+    if !ready then return ()
+    else
+      post [ exec_stmt schema_sql [] ] >>= fun _ ->
+      ready := true;
+      return ()
+  in
+  {
+    ensure_schema = ensure;
+    put_session =
+      (fun s ->
+        ensure () >>= fun () ->
+        post
+          [
+            exec_stmt
+              {|INSERT INTO interview_sessions
+                  (id, company, role, recruiter_name, work_email, work_domain,
+                   callback_url, verified, created_at)
+                VALUES (?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(id) DO UPDATE SET
+                  company=excluded.company, role=excluded.role,
+                  recruiter_name=excluded.recruiter_name,
+                  work_email=excluded.work_email, work_domain=excluded.work_domain,
+                  callback_url=excluded.callback_url, verified=excluded.verified|}
+              [
+                arg_text s.id;
+                arg_text s.company;
+                arg_text s.role;
+                arg_text s.recruiter_name;
+                arg_text s.work_email;
+                arg_text s.work_domain;
+                (match s.callback_url with
+                | Some u -> arg_text u
+                | None -> arg_null);
+                arg_int (if s.verified then 1 else 0);
+                arg_text s.created_at;
+              ];
+          ]
+        >>= fun _ -> return ());
+    get_session =
+      (fun id ->
+        ensure () >>= fun () ->
+        post
+          [
+            exec_stmt
+              {|SELECT id, company, role, recruiter_name, work_email, work_domain,
+                       callback_url, verified, created_at
+                  FROM interview_sessions WHERE id = ?|}
+              [ arg_text id ];
+          ]
+        >>= fun json ->
+        match rows_of_result json with
+        | row :: _ ->
+            let s = session_of_row row in
+            return (if s.id = "" then None else Some s)
+        | [] -> return None);
+  }
+
+let unavailable name : t =
+  let fail () = Js.Promise.reject (Failure ("missing_env:" ^ name)) in
+  {
+    ensure_schema = (fun () -> fail ());
+    put_session = (fun _ -> fail ());
+    get_session = (fun _ -> fail ());
+  }
+
+let of_config (cfg : Interview_config.t) =
+  match (cfg.turso_url, cfg.turso_token) with
+  | Some url, Some tok -> turso ~url ~token:tok ()
+  | None, _ -> unavailable "TURSO_DATABASE_URL"
+  | _, None -> unavailable "TURSO_AUTH_TOKEN"

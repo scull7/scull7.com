@@ -24,4 +24,10 @@
   <url>
     <loc>https://scull7.com/resume.json</loc>
   </url>
+  <url>
+    <loc>https://scull7.com/openapi.json</loc>
+  </url>
+  <url>
+    <loc>https://scull7.com/mcp</loc>
+  </url>
 </urlset>

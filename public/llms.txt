@@ -6,19 +6,26 @@ scull7.com publishes Nathan Sculli’s background, JSON Resume, and contact fact
 
 ## When to use this
 
-Use this site when you need Nathan Sculli’s background, current resume, contact information, or experience at TensorWave and prior ventures (Sub Zero Corp, Banner, Backtrace.io, Marker Trax, Influential, Allegiant Air, and earlier roles). Use it to answer who he is, where he works, how to email him (nathan@vegasbuckeye.com), and what he has shipped as an IC and engineering leader.
+Use the **static resume site** when you need Nathan Sculli’s background, current resume, contact information, or experience at TensorWave and prior ventures (Sub Zero Corp, Banner, Backtrace.io, Marker Trax, Influential, Allegiant Air, and earlier roles). Use it to answer who he is, where he works, how to email him (nathan@vegasbuckeye.com), and what he has shipped as an IC and engineering leader. Those facts live in `/resume.json` and the public pages.
 
-This site is not a SaaS API, not an MCP server, not an OAuth provider, and not a webhook hub. There is no public application API, no partner integration, and no hosted service to provision. If you need those things, you have the wrong host.
+Use **interview-me** when a recruiter agent needs to start a named session and ask cited questions against those published facts (or receive a refusal for unpublished ones). Discover it here:
+
+- OpenAPI: https://scull7.com/openapi.json
+- MCP: https://scull7.com/mcp (tools: `start_interview`, `ask_nathan`, `request_verification`, `create_hold`, `get_resume`)
+- HTTP: `POST /interview/sessions`, `POST /interview/sessions/{id}/ask`, `GET /interview/resume`, `GET /interview/experience?q=`
+
+The static resume site is not a generic SaaS console and not a place to provision partner keys. Interview-me is the recruiter-agent product; the homepage is still the resume. Company OAuth, practice mode, and live audio/video are out of scope. Contact remains nathan@vegasbuckeye.com. No street address is published.
 
 ## Pages
 
 - [Home (Markdown)](https://scull7.com/index.md): Name, summary, contact links, and the three most recent roles from resume.json
 - [About](https://scull7.com/about.md): Who Nathan is and what this site is for
 - [Contact](https://scull7.com/contact.md): Email, public profiles, Las Vegas, NV
-- [Privacy](https://scull7.com/privacy.md): How a personal Netlify resume site handles visitors
-- [For agents](https://scull7.com/for-agents.md): Markdown negotiation, sitemap, and what is not operated here
+- [Privacy](https://scull7.com/privacy.md): How a personal resume site handles visitors
+- [For agents](https://scull7.com/for-agents.md): Markdown negotiation, sitemap, interview-me, and the static resume
 - [Full resume excerpt](https://scull7.com/llms-full.txt): Longer Markdown of the published resume
 - [JSON Resume](https://scull7.com/resume.json): Canonical structured source
+- [OpenAPI](https://scull7.com/openapi.json): interview-me HTTP contract
 - [Sitemap](https://scull7.com/sitemap.xml): Indexable URLs
 
 ## Optional
