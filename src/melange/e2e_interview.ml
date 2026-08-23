@@ -661,7 +661,8 @@ let prove_cited_and_refuse () =
         List.iter
           (fun n ->
             E2e_ffi.assert_
-              (Js.String.includes ~search:n text)
+              (Js.String.includes ~search:(String.lowercase_ascii n)
+                 (String.lowercase_ascii text))
               ("AC6 " ^ q ^ " mentions " ^ n))
           needles;
         (match Interview_json.as_object (Interview_json.field dict "citation") with

@@ -93,6 +93,25 @@ let clip text =
   let t = String.trim text in
   if String.length t <= 400 then t else String.sub t 0 397 ^ "..."
 
+let paragraphs text =
+  let rec split acc current = function
+    | [] ->
+        let acc =
+          if String.trim current = "" then acc
+          else String.trim current :: acc
+        in
+        List.rev acc
+    | "" :: rest ->
+        if String.trim current = "" then split acc "" rest
+        else split (String.trim current :: acc) "" rest
+    | line :: rest ->
+        let current =
+          if current = "" then line else current ^ " " ^ line
+        in
+        split acc current rest
+  in
+  split [] "" (String.split_on_char '\n' text)
+
 let present s = String.trim s <> ""
 
 let passage source path text =
@@ -280,8 +299,18 @@ let best_passage corpus question topic =
   | (s, p) :: _ when s >= 1 -> Some p
   | _ -> None
 
-let cited_answer passage =
-  let quote = clip passage.text in
+let citation_text passage =
+  match
+    paragraphs passage.text
+    |> List.find_opt (fun para ->
+           wants_next_passage { passage with text = para })
+  with
+  | Some para -> para
+  | None -> passage.text
+
+let cited_answer ?(prefer_wants_next = false) passage =
+  let raw = if prefer_wants_next then citation_text passage else passage.text in
+  let quote = clip raw in
   let citation = { source = passage.source; path = passage.path; quote } in
   let answer =
     quote ^ "\n\nSource: " ^ passage.source
@@ -303,7 +332,9 @@ let ask corpus question =
         | Some passage ->
             if invented_next_claim q passage then refuse
             else
-              let answer, citation = cited_answer passage in
+              let answer, citation =
+                cited_answer ~prefer_wants_next:true passage
+              in
               { kind = Cited citation; answer })
     | _ -> (
         match best_passage corpus q topic with
