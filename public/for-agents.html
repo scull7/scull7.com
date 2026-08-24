@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="author" content="Nathan Sculli" />
-    <meta name="description" content="Developer resources for agents reading scull7.com — markdown, llms.txt, sitemap, JSON Resume." />
+    <meta name="description" content="Developer resources for agents reading scull7.com — markdown, llms.txt, sitemap, JSON Resume, interview-me." />
     <title>scull7.com developer resources — for agents</title>
     <link rel="canonical" href="https://scull7.com/for-agents" />
     <link rel="alternate" type="text/markdown" href="https://scull7.com/for-agents.md" title="Markdown" />
@@ -26,16 +26,21 @@
       <h1>scull7.com developer resources</h1>
       <p>
         This page documents the machine-readable surface of Nathan Sculli’s
-        personal resume site. It does not describe a product API, an MCP
-        server, OAuth, or webhooks — those are not operated here.
+        personal resume site and the recruiter-agent product
+        <strong>interview-me</strong>. The static resume (HTML, Markdown,
+        <code>/resume.json</code>) is not a generic SaaS console.
+        Interview-me is the OpenAPI / MCP product for recruiter agents who
+        start a named session and ask cited questions.
       </p>
       <h2>Start here</h2>
       <ul>
-        <li><a href="/llms.txt">/llms.txt</a> — when to use this site, and links to Markdown pages</li>
+        <li><a href="/llms.txt">/llms.txt</a> — when to use the static resume versus interview-me</li>
         <li><a href="/llms-full.txt">/llms-full.txt</a> — longer resume excerpt</li>
         <li><a href="/sitemap.xml">/sitemap.xml</a> — indexable URLs</li>
         <li><a href="/robots.txt">/robots.txt</a> — crawler policy</li>
         <li><a href="/resume.json">/resume.json</a> — JSON Resume 1.0 source of career facts</li>
+        <li><a href="/openapi.json">/openapi.json</a> — interview-me HTTP contract</li>
+        <li><a href="/mcp">/mcp</a> — interview-me MCP tools list</li>
       </ul>
       <h2>Markdown on the same URL</h2>
       <p>
@@ -55,11 +60,16 @@
         <a href="/privacy">/privacy</a> are static HTML (and Markdown) with
         the same name, email, and Las Vegas, NV identity as the homepage.
       </p>
-      <h2>What is not here</h2>
+      <h2>Interview-me</h2>
       <p>
-        There is no <code>/api</code>, no OpenAPI document, no MCP endpoint,
-        and no webhook receiver. If a tool asks for those, it has the wrong
-        host. Use <a href="/contact">contact</a> for humans.
+        Use interview-me to start a named session
+        (<code>company</code>, <code>role</code>,
+        <code>recruiter_name</code>, <code>work_email</code>) and ask
+        questions against published facts. Unpublished facts are refused.
+        Search experience with <code>GET /interview/experience?q=</code>.
+        Contact remains nathan@vegasbuckeye.com. No street address is
+        published. Company OAuth is not offered. For humans, use
+        <a href="/contact">contact</a>.
       </p>
       <footer class="static-footer">
         <p class="static-nap">

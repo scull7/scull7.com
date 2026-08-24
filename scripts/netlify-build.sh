@@ -56,6 +56,9 @@ echo "→ dune build @site (Melange)"
 opam exec -- dune build @site
 node _build/default/src/melange/artifacts/src/melange/emit_artifacts.cjs
 
+echo "→ interview tests"
+node _build/default/src/melange/e2e/src/melange/e2e_cli.cjs interview
+
 echo "→ vite build"
 npx vite build --config _build/default/src/melange/vite/src/melange/vite_config.js
 

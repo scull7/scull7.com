@@ -1,0 +1,400 @@
+(* HTTP + MCP surfaces for T-16. No GET-session. Verify/hold MCP names
+   fail closed. *)
+
+type request
+type response
+type headers
+type url
+type url_search
+
+external request_method : request -> string = "method" [@@mel.get]
+external request_url : request -> string = "url" [@@mel.get]
+external request_headers : request -> headers = "headers" [@@mel.get]
+external request_text : request -> string Js.Promise.t = "text" [@@mel.send]
+external headers_get_null : headers -> string -> string Js.null = "get"
+[@@mel.send]
+external new_url : string -> url = "URL" [@@mel.new]
+external url_pathname : url -> string = "pathname" [@@mel.get]
+external url_search_params : url -> url_search = "searchParams" [@@mel.get]
+external search_get_null : url_search -> string -> string Js.null = "get"
+[@@mel.send]
+
+external new_response :
+  string -> < status : int ; headers : string Js.Dict.t > Js.t -> response
+  = "Response"
+[@@mel.new]
+
+let ( >>= ) p f = Js.Promise.then_ f p
+let return x = Js.Promise.resolve x
+
+let query_get url name =
+  Js.Null.toOption (search_get_null (url_search_params url) name)
+
+let cors_headers extra =
+  let h = Js.Dict.empty () in
+  Js.Dict.set h "Access-Control-Allow-Origin" "*";
+  Js.Dict.set h "Access-Control-Allow-Methods" "GET,POST,OPTIONS";
+  Js.Dict.set h "Access-Control-Allow-Headers" "Content-Type, Authorization";
+  List.iter (fun (k, v) -> Js.Dict.set h k v) extra;
+  h
+
+let respond status content_type body extra =
+  new_response body
+    [%mel.obj
+      {
+        status;
+        headers = cors_headers (("Content-Type", content_type) :: extra);
+      }]
+
+let json_status status json =
+  respond status "application/json; charset=utf-8" (Interview_json.pretty json)
+    []
+
+let json_ok json = json_status 200 json
+let json_created json = json_status 201 json
+
+let error_res e =
+  json_status (Interview_service.error_code e) (Interview_service.error_json e)
+
+let read_object req =
+  request_text req >>= fun text ->
+  return
+    (if String.trim text = "" then Js.Dict.empty ()
+     else
+       match Interview_json.parse_object text with
+       | Some dict -> dict
+       | None -> Js.Dict.empty ())
+
+let field_any dict keys =
+  let rec loop = function
+    | [] -> None
+    | k :: rest -> (
+        match Interview_json.opt_string_field dict k with
+        | Some v -> Some v
+        | None -> loop rest)
+  in
+  loop keys
+
+let session_echo (s : Interview_store.session) extra =
+  Interview_json.obj
+    ([
+       ("id", Interview_json.str s.id);
+       ("company", Interview_json.str s.company);
+       ("role", Interview_json.str s.role);
+       ("recruiter_name", Interview_json.str s.recruiter_name);
+       ("work_email", Interview_json.str s.work_email);
+       ("verified", Interview_json.bool s.verified);
+     ]
+    @ (match s.callback_url with
+      | Some u -> [ ("callback_url", Interview_json.str u) ]
+      | None -> [])
+    @ extra)
+
+let session_json (s : Interview_store.session) = session_echo s []
+
+let ask_json (o : Interview_service.ask_output) =
+  Interview_json.obj
+    ([
+       ("id", Interview_json.str o.session_id);
+       ("session_id", Interview_json.str o.session_id);
+       ("company", Interview_json.str o.company);
+       ("role", Interview_json.str o.role);
+       ("recruiter_name", Interview_json.str o.recruiter_name);
+       ("work_email", Interview_json.str o.work_email);
+       ("answer", Interview_json.str o.answer);
+       ("cited", Interview_json.bool o.cited);
+       ("refused", Interview_json.bool o.refused);
+     ]
+    @ (match o.callback_url with
+      | Some u -> [ ("callback_url", Interview_json.str u) ]
+      | None -> [])
+    @
+    match o.citation with
+    | Some c -> [ ("citation", Interview_corpus.citation_json c) ]
+    | None -> [])
+
+let mcp_tools =
+  [
+    ( "start_interview",
+      "Start a named recruiter-agent session (company, role, recruiter name, \
+       work email). Optional callback_url.",
+      [ "company"; "role"; "recruiter_name"; "work_email" ],
+      [ "callback_url" ] );
+    ( "ask_nathan",
+      "Ask a question against published facts. Returns a cited answer or a \
+       refusal. Q&A works without verification.",
+      [ "session_id"; "question" ],
+      [] );
+    ( "request_verification",
+      "Reserved. Fail-closed in this slice.",
+      [ "session_id" ],
+      [] );
+    ( "create_hold",
+      "Reserved. Fail-closed in this slice.",
+      [ "start"; "book_token" ],
+      [ "end" ] );
+    ( "get_resume",
+      "Return published resume facts from the same corpus as cited answers.",
+      [],
+      [] );
+  ]
+
+let tool_schema required optional =
+  let props = Js.Dict.empty () in
+  List.iter
+    (fun name ->
+      Js.Dict.set props name
+        (Interview_json.obj [ ("type", Interview_json.str "string") ]))
+    (required @ optional);
+  Interview_json.obj
+    [
+      ("type", Interview_json.str "object");
+      ( "required",
+        Interview_json.arr (List.map Interview_json.str required) );
+      ("properties", Js.Json.object_ props);
+    ]
+
+let tools_list_json () =
+  Interview_json.obj
+    [
+      ( "tools",
+        Interview_json.arr
+          (List.map
+             (fun (name, desc, req, opt) ->
+               Interview_json.obj
+                 [
+                   ("name", Interview_json.str name);
+                   ("description", Interview_json.str desc);
+                   ("inputSchema", tool_schema req opt);
+                 ])
+             mcp_tools) );
+    ]
+
+let mcp_result json =
+  Interview_json.obj
+    [
+      ( "content",
+        Interview_json.arr
+          [
+            Interview_json.obj
+              [
+                ("type", Interview_json.str "text");
+                ("text", Interview_json.str (Interview_json.pretty json));
+              ];
+          ] );
+      ("structuredContent", json);
+    ]
+
+let mcp_error id code message data =
+  Interview_json.obj
+    [
+      ("jsonrpc", Interview_json.str "2.0");
+      ("id", id);
+      ( "error",
+        Interview_json.obj
+          ([
+             ("code", Interview_json.num (float_of_int code));
+             ("message", Interview_json.str message);
+           ]
+          @
+          match data with
+          | None -> []
+          | Some d -> [ ("data", d) ]) );
+    ]
+
+let mcp_ok id result =
+  Interview_json.obj
+    [
+      ("jsonrpc", Interview_json.str "2.0");
+      ("id", id);
+      ("result", result);
+    ]
+
+let path_segments path =
+  path |> String.split_on_char '/' |> List.filter (fun s -> s <> "")
+
+let start_input_of dict : Interview_service.start_input =
+  {
+    company =
+      (match field_any dict [ "company" ] with Some v -> v | None -> "");
+    role = (match field_any dict [ "role" ] with Some v -> v | None -> "");
+    recruiter_name =
+      (match field_any dict [ "recruiter_name"; "recruiterName" ] with
+      | Some v -> v
+      | None -> "");
+    work_email =
+      (match field_any dict [ "work_email"; "workEmail" ] with
+      | Some v -> v
+      | None -> "");
+    callback_url = field_any dict [ "callback_url"; "callbackUrl" ];
+  }
+
+let handle_start deps dict =
+  Interview_service.start deps (start_input_of dict) >>= function
+  | Error e -> return (error_res e)
+  | Ok session -> return (json_created (session_json session))
+
+let handle_ask deps session_id dict =
+  let question =
+    match field_any dict [ "question" ] with Some v -> v | None -> ""
+  in
+  Interview_service.ask deps ~session_id ~question >>= function
+  | Error e -> return (error_res e)
+  | Ok out -> return (json_ok (ask_json out))
+
+let handle_resume deps = return (json_ok (Interview_service.get_resume deps))
+
+let handle_experience deps query =
+  let q = String.trim query in
+  if q = "" then return (error_res (Interview_service.Invalid "q is required"))
+  else
+    let hits = Interview_service.search_experience deps q in
+    return
+      (json_ok
+         (Interview_json.obj
+            [
+              ( "results",
+                Interview_json.arr
+                  (List.map
+                     (fun (p : Interview_corpus.passage) ->
+                       Interview_json.obj
+                         [
+                           ("source", Interview_json.str p.source);
+                           ("path", Interview_json.str p.path);
+                           ("quote", Interview_json.str (String.trim p.text));
+                         ])
+                     hits) );
+            ]))
+
+let mcp_call deps name args =
+  match name with
+  | "start_interview" ->
+      Interview_service.start deps (start_input_of args) >>= (function
+      | Error e -> return (Error e)
+      | Ok s -> return (Ok (session_json s)))
+  | "ask_nathan" ->
+      let session_id =
+        match field_any args [ "session_id"; "sessionId" ] with
+        | Some v -> v
+        | None -> ""
+      in
+      Interview_service.ask deps ~session_id
+        ~question:
+          (match field_any args [ "question" ] with Some v -> v | None -> "")
+      >>= (function
+      | Error e -> return (Error e) | Ok out -> return (Ok (ask_json out)))
+  | "request_verification" ->
+      let session_id =
+        match field_any args [ "session_id"; "sessionId" ] with
+        | Some v -> v
+        | None -> ""
+      in
+      Interview_service.request_verification deps ~session_id >>= (function
+      | Error e -> return (Error e)
+      | Ok () -> return (Ok (Interview_json.obj [])))
+  | "create_hold" ->
+      Interview_service.create_hold deps
+        ~start:
+          (match field_any args [ "start" ] with Some v -> v | None -> "")
+        ~end_:(field_any args [ "end" ])
+        ~book_token:
+          (match field_any args [ "book_token"; "bookToken" ] with
+          | Some v -> v
+          | None -> "")
+      >>= (function
+      | Error e -> return (Error e)
+      | Ok () -> return (Ok (Interview_json.obj [])))
+  | "get_resume" -> return (Ok (Interview_service.get_resume deps))
+  | other ->
+      return (Error (Interview_service.Invalid ("unknown MCP tool: " ^ other)))
+
+let handle_mcp deps req =
+  read_object req >>= fun dict ->
+  let id =
+    match Js.Dict.get dict "id" with
+    | Some json -> json
+    | None -> Interview_json.null
+  in
+  let method_ = Interview_json.string_field dict "method" in
+  match method_ with
+  | "initialize" ->
+      return
+        (json_ok
+           (mcp_ok id
+              (Interview_json.obj
+                 [
+                   ("protocolVersion", Interview_json.str "2024-11-05");
+                   ( "capabilities",
+                     Interview_json.obj [ ("tools", Interview_json.obj []) ] );
+                   ( "serverInfo",
+                     Interview_json.obj
+                       [
+                         ("name", Interview_json.str "interview-me");
+                         ("version", Interview_json.str "1.0.0");
+                       ] );
+                 ])))
+  | "notifications/initialized" | "initialized" ->
+      return (respond 204 "text/plain; charset=utf-8" "" [])
+  | "ping" -> return (json_ok (mcp_ok id (Interview_json.obj [])))
+  | "tools/list" -> return (json_ok (mcp_ok id (tools_list_json ())))
+  | "tools/call" ->
+      let params = Interview_json.object_field dict "params" in
+      let name = Interview_json.string_field params "name" in
+      let args = Interview_json.object_field params "arguments" in
+      if not (List.exists (fun (n, _, _, _) -> n = name) mcp_tools) then
+        return (json_ok (mcp_error id (-32601) ("Unknown tool: " ^ name) None))
+      else
+        mcp_call deps name args >>= (function
+        | Error e ->
+            return
+              (json_ok
+                 (mcp_error id (-32000) "tool error"
+                    (Some (Interview_service.error_json e))))
+        | Ok json -> return (json_ok (mcp_ok id (mcp_result json))))
+  | "" ->
+      return (json_ok (mcp_error id (-32600) "Missing JSON-RPC method" None))
+  | other ->
+      return
+        (json_ok (mcp_error id (-32601) ("Unknown method: " ^ other) None))
+
+let function_mount = "/.netlify/functions/interview"
+
+let canonical_pathname pathname =
+  if pathname = function_mount || pathname = function_mount ^ "/" then pathname
+  else if String.starts_with ~prefix:(function_mount ^ "/") pathname then
+    String.sub pathname
+      (String.length function_mount)
+      (String.length pathname - String.length function_mount)
+  else pathname
+
+let handle_rest deps req url =
+  let path = canonical_pathname (url_pathname url) in
+  let meth = request_method req in
+  if meth = "OPTIONS" then
+    return (respond 204 "text/plain; charset=utf-8" "" [])
+  else if path = "/openapi.json" && (meth = "GET" || meth = "HEAD") then
+    return
+      (json_ok
+         (Interview_openapi.document
+            ~site_url:deps.Interview_service.cfg.site_url))
+  else if path = "/mcp" && meth = "GET" then return (json_ok (tools_list_json ()))
+  else if path = "/mcp" && meth = "POST" then handle_mcp deps req
+  else if path = "/interview/sessions" && meth = "POST" then
+    read_object req >>= handle_start deps
+  else if path = "/interview/resume" && (meth = "GET" || meth = "HEAD") then
+    handle_resume deps
+  else if path = "/interview/experience" && (meth = "GET" || meth = "HEAD") then
+    handle_experience deps
+      (match query_get url "q" with Some q -> q | None -> "")
+  else
+    match (meth, path_segments path) with
+    | "POST", [ "interview"; "sessions"; id; "ask" ] ->
+        read_object req >>= handle_ask deps id
+    | _ ->
+        return
+          (respond 404 "application/json; charset=utf-8"
+             (Interview_json.pretty
+                (Interview_json.obj [ ("error", Interview_json.str "not_found") ]))
+             [])
+
+let handle deps req = handle_rest deps req (new_url (request_url req))

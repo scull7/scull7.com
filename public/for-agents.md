@@ -1,14 +1,16 @@
 # scull7.com developer resources
 
-This page documents the machine-readable surface of Nathan Sculli’s personal resume site. It does not describe a product API, an MCP server, OAuth, or webhooks — those are not operated here.
+This page documents the machine-readable surface of Nathan Sculli’s personal resume site and the recruiter-agent product **interview-me**. The static resume (HTML, Markdown, `/resume.json`) is not a generic SaaS console. Interview-me is the OpenAPI / MCP product for recruiter agents who start a named session and ask cited questions.
 
 ## Start here
 
-- [/llms.txt](https://scull7.com/llms.txt) — when to use this site, and links to Markdown pages
+- [/llms.txt](https://scull7.com/llms.txt) — when to use the static resume versus interview-me
 - [/llms-full.txt](https://scull7.com/llms-full.txt) — longer resume excerpt
 - [/sitemap.xml](https://scull7.com/sitemap.xml) — indexable URLs
 - [/robots.txt](https://scull7.com/robots.txt) — crawler policy
 - [/resume.json](https://scull7.com/resume.json) — JSON Resume 1.0 source of career facts
+- [/openapi.json](https://scull7.com/openapi.json) — interview-me HTTP contract
+- [/mcp](https://scull7.com/mcp) — interview-me MCP tools list
 
 ## Markdown on the same URL
 
@@ -18,8 +20,10 @@ Pages that have an HTML representation also serve `text/markdown; charset=utf-8`
 
 [/about](https://scull7.com/about), [/contact](https://scull7.com/contact), and [/privacy](https://scull7.com/privacy) are static HTML (and Markdown) with the same name, email, and Las Vegas, NV identity as the homepage.
 
-## What is not here
+## Interview-me
 
-There is no `/api`, no OpenAPI document, no MCP endpoint, and no webhook receiver. If a tool asks for those, it has the wrong host. Use [contact](https://scull7.com/contact) for humans.
+Use interview-me to start a named session (`company`, `role`, `recruiter_name`, `work_email`) and ask questions against published facts. Unpublished facts are refused. Search experience with `GET /interview/experience?q=`. Contact remains nathan@vegasbuckeye.com. No street address is published.
+
+Company OAuth is not offered. For humans, use [contact](https://scull7.com/contact).
 
 Nathan Sculli · Las Vegas, NV · nathan@vegasbuckeye.com · https://scull7.com

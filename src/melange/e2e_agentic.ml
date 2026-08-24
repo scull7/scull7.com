@@ -106,9 +106,13 @@ let prove_trust_page_files () =
     (Js.Re.test ~str:llms [%mel.re "/When to use this/i"])
     "llms.txt missing When to use this";
   E2e_ffi.assert_
-    (Js.Re.test ~str:llms [%mel.re "/not a SaaS API/i"]
-    && Js.Re.test ~str:llms [%mel.re "/not an MCP server/i"])
-    "llms.txt missing not-for jobs";
+    (Js.Re.test ~str:llms [%mel.re "/interview-me/i"]
+    && Js.Re.test ~str:llms [%mel.re "/openapi\\.json/i"]
+    && Js.Re.test ~str:llms [%mel.re "/\\/mcp/"])
+    "llms.txt missing interview-me OpenAPI/MCP when-to-use";
+  E2e_ffi.assert_
+    (Js.Re.test ~str:llms [%mel.re "/static resume/i"])
+    "llms.txt missing static-resume vs interview-me split";
   E2e_ffi.assert_
     (Js.Re.test ~str:llms [%mel.re "/TensorWave/"])
     "llms.txt missing TensorWave";

@@ -42,7 +42,7 @@ npm run preview
 - Browser interop, Accept negotiation, Vite config, Netlify edge, e2e: **Melange** (OCaml)  
 - Crawlable HTML: **Melange** CLI (`src/melange/crawlable*.ml`)  
 - Planned split: public framework repo, private scull7.com site — [`docs/FRAMEWORK-EXTRACT.md`](docs/FRAMEWORK-EXTRACT.md) / Pinto T-14  
-- Planned interview-me v1 (recruiter-agent Q&A + calendar hold) — [`docs/INTERVIEW-ME.md`](docs/INTERVIEW-ME.md) / Pinto T-15  
+- Planned interview-me v1 (recruiter-agent Q&A + calendar hold) — [`docs/INTERVIEW-ME.md`](docs/INTERVIEW-ME.md). T-16 ships named session + cited Q&A; T-15 is the locked spec, not a merge of PR 18.
 
 ## Crawlable HTML
 
@@ -101,7 +101,8 @@ Palette-primary: `:` / `/` open the command palette; the bottom cmdline **echoes
 ## Testing
 
 ```bash
-npm test                 # elm make + T-13 + agentic + Playwright e2e
+npm test                 # elm make + T-13 + agentic + Playwright e2e + interview
+npm run test:interview   # T-16 named session, cited Q&A, OpenAPI, MCP
 npm run test:t13         # no-JS Vite preview GET / + resume.json fixtures
 npm run test:agentic     # Accept parsing, markdown, 404, trust pages
 npx playwright install chromium   # once
