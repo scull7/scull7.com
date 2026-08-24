@@ -1,6 +1,6 @@
-(* Interview-me T-16/T-17 configuration. Free-email lists, Turso env,
-   magic-link TTL, and mail sender are overridable without a code change.
-   INTERVIEW_STORE is ignored. *)
+(* Interview-me T-16/T-17/T-18 configuration. Free-email lists, Turso env,
+   magic-link TTL, mail sender, and the required question set are
+   overridable without a code change. INTERVIEW_STORE is ignored. *)
 
 type t = {
   site_url : string;
@@ -13,6 +13,7 @@ type t = {
   magic_link_ttl_ms : float;
   book_token_ttl_ms : float;
   resend_api_key : string option;
+  required_questions_raw : string option;
 }
 
 type source = string -> string option
@@ -108,6 +109,7 @@ let of_source ?(source = process_source) () =
           match source "INTERVIEW_RESEND_API_KEY" with
           | Some v -> Some (sanitize_secret v)
           | None -> None));
+    required_questions_raw = source "INTERVIEW_REQUIRED_QUESTIONS";
   }
 
 let load () = of_source ()
@@ -127,6 +129,8 @@ let missing_mail cfg =
   match cfg.resend_api_key with
   | Some _ -> None
   | None -> Some "RESEND_API_KEY"
+
+let required_ids cfg = Interview_required.parse cfg.required_questions_raw
 
 let normalize_block item =
   let s = String.lowercase_ascii (String.trim item) in

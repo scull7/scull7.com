@@ -1,5 +1,6 @@
-(* Named session + cited ask + human magic-link verify. create_hold stays
-   fail-closed; T-19 owns calendar holds. *)
+(* Named session + cited ask + required-set progress + human magic-link
+   verify. create_hold stays fail-closed; T-19 owns calendar holds.
+   Required-set matching is a calculation; webhook POST is isolated. *)
 
 type error =
   | Missing_env of string
@@ -27,6 +28,8 @@ type ask_output = {
   cited : bool;
   citation : Interview_corpus.citation option;
   refused : bool;
+  required_progress : string list;
+  required_remaining : string list;
 }
 
 type verify_request_output = { session_id : string }
@@ -45,6 +48,7 @@ type deps = {
   corpus : Interview_corpus.t;
   mail : Interview_mail.t;
   calendar : Interview_calendar.t;
+  webhook : Interview_webhook.t;
 }
 
 let ( >>= ) p f = Js.Promise.then_ f p
@@ -126,12 +130,54 @@ let start (deps : deps) (input : start_input) =
               (match input.callback_url with
               | Some u when String.trim u <> "" -> Some (String.trim u)
               | _ -> None);
+            hiring_timeline = None;
+            completed = [];
             verified = false;
             created_at = now;
           }
         in
         catch_store
           (deps.store.put_session session >>= fun () -> ok session)
+
+let ask_fields (session : Interview_store.session) ~answer ~cited ~citation
+    ~refused (snap : Interview_required.snapshot) : ask_output =
+  {
+    session_id = session.id;
+    company = session.company;
+    role = session.role;
+    recruiter_name = session.recruiter_name;
+    work_email = session.work_email;
+    callback_url = session.callback_url;
+    answer;
+    cited;
+    citation;
+    refused;
+    required_progress = snap.required_progress;
+    required_remaining = snap.required_remaining;
+  }
+
+let persist_progress (session : Interview_store.session)
+    (snap : Interview_required.snapshot) =
+  {
+    session with
+    completed = snap.progress.completed;
+    hiring_timeline = snap.progress.hiring_timeline;
+  }
+
+let fire_completed deps (session : Interview_store.session)
+    (snap : Interview_required.snapshot) =
+  match session.callback_url with
+  | None -> return ()
+  | Some url ->
+      let body =
+        Interview_json.json_stringify
+          (Interview_webhook.interview_completed_body ~session
+             ~required_progress:snap.required_progress
+             ~required_remaining:snap.required_remaining)
+      in
+      deps.webhook.post url body
+      >>= (function Ok () | Error _ -> return ())
+      |> Js.Promise.catch (fun _ -> return ())
 
 let ask (deps : deps) ~session_id ~question =
   match Interview_config.missing_store deps.cfg with
@@ -144,29 +190,63 @@ let ask (deps : deps) ~session_id ~question =
           (deps.store.get_session session_id >>= function
           | None -> err Not_found
           | Some session ->
+              let required = Interview_config.required_ids deps.cfg in
+              let before =
+                Interview_required.snapshot required
+                  {
+                    completed = session.completed;
+                    hiring_timeline = session.hiring_timeline;
+                  }
+              in
+              let classified =
+                Interview_required.classify ~progress:before.progress
+                  ~question:q
+              in
               let hit = Interview_corpus.ask deps.corpus q in
+              let answer, cited, citation, refused, after =
+                match classified with
+                | Interview_required.Record_timeline words ->
+                    let snap =
+                      Interview_required.apply ~required
+                        ~progress:before.progress classified
+                    in
+                    ( Interview_required.timeline_record_answer words,
+                      false,
+                      None,
+                      false,
+                      snap )
+                | Interview_required.Echo_timeline words ->
+                    ( Interview_required.timeline_echo_answer words,
+                      false,
+                      None,
+                      false,
+                      Interview_required.apply ~required
+                        ~progress:before.progress classified )
+                | Interview_required.Refuse_timeline ->
+                    ( Interview_corpus.refuse_text,
+                      false,
+                      None,
+                      true,
+                      before )
+                | Interview_required.Ask_corpus -> (
+                    match hit.kind with
+                    | Interview_corpus.Refuse ->
+                        (hit.answer, false, None, true, before)
+                    | Interview_corpus.Cited c ->
+                        let snap =
+                          Interview_required.apply_cited ~required
+                            ~progress:before.progress ~question:q
+                        in
+                        (hit.answer, true, Some c, false, snap))
+              in
+              let session = persist_progress session after in
+              deps.store.put_session session >>= fun () ->
+              (if Interview_required.just_completed ~before ~after then
+                 fire_completed deps session after
+               else return ())
+              >>= fun () ->
               ok
-                {
-                  session_id = session.id;
-                  company = session.company;
-                  role = session.role;
-                  recruiter_name = session.recruiter_name;
-                  work_email = session.work_email;
-                  callback_url = session.callback_url;
-                  answer = hit.answer;
-                  cited =
-                    (match hit.kind with
-                    | Interview_corpus.Cited _ -> true
-                    | Interview_corpus.Refuse -> false);
-                  citation =
-                    (match hit.kind with
-                    | Interview_corpus.Cited c -> Some c
-                    | Interview_corpus.Refuse -> None);
-                  refused =
-                    (match hit.kind with
-                    | Interview_corpus.Refuse -> true
-                    | Interview_corpus.Cited _ -> false);
-                })
+                (ask_fields session ~answer ~cited ~citation ~refused after))
 
 let escape_html s =
   s

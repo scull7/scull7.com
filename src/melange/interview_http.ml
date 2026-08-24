@@ -1,6 +1,6 @@
-(* HTTP + MCP surfaces for T-16/T-17. No GET-session. create_hold stays
-   fail-closed. Agent-facing verify-request never returns the magic URL
-   or book token. *)
+(* HTTP + MCP surfaces for T-16/T-17/T-18. No GET-session. create_hold
+   stays fail-closed. Agent-facing verify-request never returns the magic
+   URL or book token. Ask JSON includes required-set progress. *)
 
 type request
 type response
@@ -105,6 +105,10 @@ let ask_json (o : Interview_service.ask_output) =
        ("answer", Interview_json.str o.answer);
        ("cited", Interview_json.bool o.cited);
        ("refused", Interview_json.bool o.refused);
+       ( "required_progress",
+         Interview_required.string_array o.required_progress );
+       ( "required_remaining",
+         Interview_required.string_array o.required_remaining );
      ]
     @ (match o.callback_url with
       | Some u -> [ ("callback_url", Interview_json.str u) ]
