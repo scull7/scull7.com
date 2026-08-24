@@ -1,6 +1,7 @@
-(* T-16 + T-17 + T-18 proofs: named Turso session, cited Q&A, required-set
-   progress, interview.completed once, human magic-link verify / book
-   token, resume/experience, OpenAPI + MCP + llms.txt. Each AC inverts. *)
+(* T-16 + T-17 + T-18 + T-19 proofs: named Turso session, cited Q&A,
+   required-set progress, interview.completed once, human magic-link
+   verify / book token, create_hold refuse-or-create + booking.requested,
+   resume/experience, OpenAPI + MCP + llms.txt. Each AC inverts. *)
 
 let ( >>= ) p f = Js.Promise.then_ f p
 let return x = Js.Promise.resolve x
@@ -69,6 +70,9 @@ let test_cfg extras =
              env "INTERVIEW_MAGIC_LINK_SECRET" "test-secret-interview-me";
              env "RESEND_API_KEY" "re_test_not_a_secret";
              env "INTERVIEW_MAIL_FROM" "nathan@vegasbuckeye.com";
+             env "GOOGLE_OAUTH_CLIENT_ID" "test-gcal-client";
+             env "GOOGLE_OAUTH_CLIENT_SECRET" "test-gcal-secret";
+             env "GOOGLE_OAUTH_REFRESH_TOKEN" "test-gcal-refresh";
            ]))
     ()
 
@@ -84,14 +88,18 @@ let test_corpus () =
   Interview_corpus.of_pages ~resume_json:(load_resume ())
     [ ("/about.md", about) ]
 
-let memory_full ?cfg ?now_ms ?store ?webhook () =
+let memory_full ?cfg ?now_ms ?store ?webhook ?mail () =
   let cfg = match cfg with Some c -> c | None -> test_cfg [] in
   let store =
     match store with
     | Some s -> s
     | None -> Interview_store.Memory.bind (Interview_store.Memory.create ())
   in
-  let mail, sent = Interview_mail.capture () in
+  let mail, sent =
+    match mail with
+    | Some (m, s) -> (m, s)
+    | None -> Interview_mail.capture ()
+  in
   let calendar, created = Interview_calendar.capture () in
   let webhook, hooks =
     match webhook with
@@ -1979,6 +1987,720 @@ let prove_t18_no_hold_or_verify () =
   E2e_ffi.pass "T-18 AC9 no create_hold, verify, book token, GCal, or hold mail";
   return ()
 
+let hold_start = "2026-09-01T17:00:00.000Z"
+let hold_end_explicit = "2026-09-01T19:30:00.000Z"
+
+let hold_body ~book_token ?end_ ?(start = hold_start) () =
+  Interview_json.json_stringify
+    (Interview_json.obj
+       ([
+          ("start", Interview_json.str start);
+          ("book_token", Interview_json.str book_token);
+        ]
+       @
+       match end_ with
+       | Some e -> [ ("end", Interview_json.str e) ]
+       | None -> []))
+
+let post_hold deps ~book_token ?end_ ?start () =
+  Interview_http.handle deps
+    (req "POST" "/interview/holds" (hold_body ~book_token ?end_ ?start ()))
+
+let harvest_ban_link kind text =
+  let re =
+    if kind = "domain" then
+      [%mel.re
+        "/https:\\/\\/scull7\\.com\\/interview\\/ban\\?kind=domain&token=([^\\s<\"']+)/"]
+    else
+      [%mel.re
+        "/https:\\/\\/scull7\\.com\\/interview\\/ban\\?kind=address&token=([^\\s<\"']+)/"]
+  in
+  match E2e_ffi.capture1 re text with
+  | Some t -> t
+  | None -> failwith ("ban " ^ kind ^ " link missing from mail")
+
+let nathan_hold_mail sent =
+  List.filter
+    (fun (m : Interview_mail.message) ->
+      m.to_ = "nathan@vegasbuckeye.com"
+      && Js.String.includes ~search:"hold"
+           (String.lowercase_ascii m.subject))
+    !sent
+
+let booking_count hooks =
+  List.length
+    (List.filter (fun e -> e = "booking.requested") (webhook_event_names hooks))
+
+let completed_count hooks =
+  List.length
+    (List.filter
+       (fun e -> e = "interview.completed")
+       (webhook_event_names hooks))
+
+let assert_no_touch ~sent ~created ~hooks ~holds label =
+  E2e_ffi.assert_ (!created = []) (label ^ " no GCal event");
+  E2e_ffi.assert_
+    (nathan_hold_mail sent = [])
+    (label ^ " no Nathan hold mail");
+  E2e_ffi.assert_ (booking_count hooks = 0) (label ^ " no booking.requested");
+  E2e_ffi.assert_
+    (completed_count hooks = 0)
+    (label ^ " no interview.completed");
+  E2e_ffi.assert_ (Hashtbl.length holds = 0) (label ^ " no hold-cap consume")
+
+let verify_book deps (sent : Interview_mail.message list ref) id =
+  Interview_http.handle deps
+    (req "POST" ("/interview/sessions/" ^ id ^ "/verify-request") "")
+  >>= fun _ ->
+  let token = harvest_magic_link (List.hd !sent).Interview_mail.text in
+  Interview_http.handle deps
+    (req "GET" ("/interview/verify?token=" ^ token) "")
+  >>= fun res ->
+  json_body res >>= fun (_, obj) ->
+  match obj with
+  | Some dict -> return (Interview_json.string_field dict "book_token")
+  | None -> failwith "verify book token missing"
+
+let complete_set deps id =
+  complete_four deps id >>= fun _ ->
+  ask_dict deps id q_timeline >>= fun (status, _, dict) ->
+  E2e_ffi.assert_ (status = 200) "complete set ask 200";
+  E2e_ffi.assert_
+    (string_list_field dict "required_remaining" = [])
+    "complete set remaining empty";
+  return ()
+
+let ready_hold ?cfg ?now_ms ?store ?webhook ?mail ?callback
+    ?(email = "recruiter@acme.example") () =
+  let deps, sent, created, hooks =
+    memory_full ?cfg ?now_ms ?store ?webhook ?mail ()
+  in
+  start_session deps ~email ?callback () >>= fun (id, _) ->
+  complete_set deps id >>= fun () ->
+  verify_book deps sent id >>= fun book ->
+  return (deps, sent, created, hooks, id, book)
+
+(* T-19 AC1 *)
+let prove_t19_required_incomplete () =
+  let tables = Interview_store.Memory.create () in
+  let store = Interview_store.Memory.bind tables in
+  let deps, sent, created, hooks = memory_full ~store () in
+  start_session deps ~callback:"https://hooks.example/t19-inc" ()
+  >>= fun (id, _) ->
+  verify_book deps sent id >>= fun book ->
+  ask_dict deps id q_current >>= fun _ ->
+  post_hold deps ~book_token:book () >>= fun res ->
+  E2e_ffi.assert_
+    (response_status res = 409
+    || (response_status res >= 400 && response_status res < 500))
+    "T-19 AC1 required_incomplete is 4xx/409";
+  json_body res >>= fun (text, _) ->
+  E2e_ffi.assert_
+    (error_name text = "required_incomplete")
+    "T-19 AC1 error=required_incomplete";
+  E2e_ffi.assert_
+    (not
+       (Js.String.includes ~search:"hold_id" text
+       && not (Js.String.includes ~search:"required_incomplete" text)))
+    "T-19 AC1 no hold created";
+  assert_no_touch ~sent ~created ~hooks ~holds:tables.holds "T-19 AC1";
+  E2e_ffi.pass
+    "T-19 AC1 valid book token + incomplete set is required_incomplete";
+  return ()
+
+(* T-19 AC2 *)
+let prove_t19_token_invalid () =
+  let tables = Interview_store.Memory.create () in
+  let store = Interview_store.Memory.bind tables in
+  let deps, sent, created, hooks = memory_full ~store () in
+  start_session deps ()
+  >>= fun (id, _) ->
+  complete_set deps id >>= fun () ->
+  let cases =
+    [
+      ("", "empty");
+      ("not-a-token", "forged");
+      ( "deadbeef.0000000000000000000000000000000000000000000000000000000000000000",
+        "unknown" );
+    ]
+  in
+  let rec loop = function
+    | [] -> return ()
+    | (tok, label) :: rest ->
+        post_hold deps ~book_token:tok () >>= fun res ->
+        json_body res >>= fun (text, _) ->
+        E2e_ffi.assert_
+          (error_name text = "token_invalid")
+          ("T-19 AC2 " ^ label ^ " token_invalid");
+        E2e_ffi.assert_
+          (error_name text <> "unverified"
+          && error_name text <> "not_found")
+          ("T-19 AC2 " ^ label ^ " is not unverified/not_found");
+        loop rest
+  in
+  loop cases >>= fun () ->
+  Interview_http.handle deps
+    (req "POST" "/interview/holds"
+       (Interview_json.json_stringify
+          (Interview_json.obj
+             [ ("start", Interview_json.str hold_start) ])))
+  >>= fun missing ->
+  json_body missing >>= fun (missing_text, _) ->
+  E2e_ffi.assert_
+    (error_name missing_text = "token_invalid")
+    "T-19 AC2 missing book token is token_invalid";
+  let secret =
+    match deps.cfg.magic_link_secret with
+    | Some s -> s
+    | None -> failwith "T-19 AC2 secret"
+  in
+  let raw = "book_orphan" in
+  deps.store.put_token
+    {
+      token = raw;
+      kind = "book";
+      session_id = "ses_never";
+      expires_at =
+        Interview_token.expires_at_iso ~now_ms:(deps.now_ms ())
+          ~ttl_ms:1_800_000.;
+      consumed = false;
+      created_at = Interview_clock.iso_of_ms (deps.now_ms ());
+    }
+  >>= fun () ->
+  post_hold deps ~book_token:(Interview_token.sign_token secret raw) ()
+  >>= fun orphan ->
+  json_body orphan >>= fun (orphan_text, _) ->
+  E2e_ffi.assert_
+    (error_name orphan_text = "token_invalid")
+    "T-19 AC2 unknown session is token_invalid";
+  E2e_ffi.assert_
+    (error_name orphan_text <> "not_found")
+    "T-19 AC2 unknown session is not not_found";
+  assert_no_touch ~sent ~created ~hooks ~holds:tables.holds "T-19 AC2";
+  E2e_ffi.pass
+    "T-19 AC2 no/forged/empty/unknown book token and unknown session are \
+     token_invalid";
+  return ()
+
+(* T-19 AC3 *)
+let prove_t19_book_token_ttl () =
+  let unset =
+    Interview_config.of_source
+      ~source:
+        (source
+           [
+             env "TURSO_DATABASE_URL" "https://interview-me.test.invalid";
+             env "TURSO_AUTH_TOKEN" "test-turso-token";
+           ])
+      ()
+  in
+  E2e_ffi.assert_
+    (unset.book_token_ttl_ms = 1_800_000.)
+    "T-19 AC3 default unset book TTL is 1800000";
+  let now = ref 1_700_000_000_000. in
+  let cfg = test_cfg [ env "INTERVIEW_BOOK_TOKEN_TTL_MS" "2000" ] in
+  E2e_ffi.assert_ (cfg.book_token_ttl_ms = 2000.) "T-19 AC3 env TTL is 2000";
+  let tables = Interview_store.Memory.create () in
+  ready_hold ~cfg ~now_ms:(fun () -> !now)
+    ~store:(Interview_store.Memory.bind tables) ()
+  >>= fun (deps, sent, created, hooks, _id, book) ->
+  now := !now +. 2001.;
+  post_hold deps ~book_token:book () >>= fun res ->
+  json_body res >>= fun (text, _) ->
+  E2e_ffi.assert_ (error_name text = "token_invalid")
+    "T-19 AC3 expired book token is token_invalid";
+  assert_no_touch ~sent ~created ~hooks ~holds:tables.holds "T-19 AC3";
+  E2e_ffi.pass "T-19 AC3 tester clock expires book token; default stays 1800000";
+  return ()
+
+(* T-19 AC4 *)
+let prove_t19_invalid_start () =
+  let tables = Interview_store.Memory.create () in
+  ready_hold ~store:(Interview_store.Memory.bind tables) ()
+  >>= fun (deps, sent, created, hooks, _id, book) ->
+  let rec loop = function
+    | [] -> return ()
+    | (start, label) :: rest ->
+        post_hold deps ~book_token:book ~start () >>= fun res ->
+        json_body res >>= fun (text, _) ->
+        E2e_ffi.assert_
+          (error_name text = "invalid")
+          ("T-19 AC4 " ^ label ^ " is invalid");
+        loop rest
+  in
+  loop [ ("", "empty start"); ("   ", "whitespace start") ] >>= fun () ->
+  Interview_http.handle deps
+    (req "POST" "/interview/holds"
+       (Interview_json.json_stringify
+          (Interview_json.obj [ ("book_token", Interview_json.str book) ])))
+  >>= fun missing ->
+  json_body missing >>= fun (missing_text, _) ->
+  E2e_ffi.assert_
+    (error_name missing_text = "invalid")
+    "T-19 AC4 missing start is invalid";
+  assert_no_touch ~sent ~created ~hooks ~holds:tables.holds "T-19 AC4";
+  E2e_ffi.pass "T-19 AC4 missing/empty start is invalid; no-touch";
+  return ()
+
+(* T-19 AC5 *)
+let prove_t19_create_hold_and_mcp () =
+  ready_hold ~callback:"https://hooks.example/t19-hold" ()
+  >>= fun (deps, sent, created, hooks, id, book) ->
+  post_hold deps ~book_token:book () >>= fun res ->
+  E2e_ffi.assert_ (response_status res = 201) "T-19 AC5 HTTP hold 201";
+  json_body res >>= fun (_, obj) ->
+  (match obj with
+  | None -> failwith "T-19 AC5 hold body"
+  | Some dict ->
+      E2e_ffi.assert_
+        (Interview_json.string_field dict "session_id" = id)
+        "T-19 AC5 session_id";
+      E2e_ffi.assert_
+        (Interview_json.string_field dict "start" = hold_start)
+        "T-19 AC5 start";
+      E2e_ffi.assert_
+        (Interview_json.string_field dict "end" = "2026-09-01T18:00:00.000Z")
+        "T-19 AC5 default end is +1 hour";
+      E2e_ffi.assert_
+        (Interview_json.string_field dict "calendar_id" = "scull7.com")
+        "T-19 AC5 default calendar id";
+      E2e_ffi.assert_
+        (Interview_json.string_field dict "status" = "tentative")
+        "T-19 AC5 tentative");
+  E2e_ffi.assert_ (List.length !created = 1) "T-19 AC5 one GCal event";
+  let ev = List.hd !created in
+  E2e_ffi.assert_ (ev.calendar_id = "scull7.com") "T-19 AC5 GCal calendar_id";
+  E2e_ffi.assert_ (ev.start_iso = hold_start) "T-19 AC5 GCal start";
+  E2e_ffi.assert_
+    (ev.end_iso = "2026-09-01T18:00:00.000Z")
+    "T-19 AC5 GCal default 1 hour";
+  E2e_ffi.assert_
+    (List.length (nathan_hold_mail sent) = 1)
+    "T-19 AC5 Nathan hold mail sent";
+  ready_hold ~email:"mcp@acme.example" ()
+  >>= fun (deps2, _sent2, created2, _hooks2, id2, book2) ->
+  Interview_http.handle deps2
+    (req "POST" "/mcp"
+       (mcp_call "create_hold"
+          (Interview_json.obj
+             [
+               ("start", Interview_json.str hold_start);
+               ("end", Interview_json.str hold_end_explicit);
+               ("book_token", Interview_json.str book2);
+             ])))
+  >>= fun mcp_res ->
+  E2e_ffi.assert_ (response_status mcp_res = 200) "T-19 AC5 MCP create_hold";
+  response_text mcp_res >>= fun mcp_text ->
+  (match mcp_structured mcp_text with
+  | None -> failwith "T-19 AC5 MCP structured"
+  | Some dict ->
+      E2e_ffi.assert_
+        (Interview_json.string_field dict "session_id" = id2)
+        "T-19 AC5 MCP session_id";
+      E2e_ffi.assert_
+        (Interview_json.string_field dict "end" = hold_end_explicit)
+        "T-19 AC5 MCP passing end uses that end";
+      E2e_ffi.assert_
+        (Interview_json.string_field dict "calendar_id" = "scull7.com")
+        "T-19 AC5 MCP calendar_id");
+  E2e_ffi.assert_ (List.length !created2 = 1) "T-19 AC5 MCP created one event";
+  E2e_ffi.assert_
+    ((List.hd !created2).end_iso = hold_end_explicit)
+    "T-19 AC5 MCP GCal uses passed end";
+  ignore hooks;
+  E2e_ffi.pass
+    "T-19 AC5 create_hold makes a 1-hour tentative event; MCP matches HTTP";
+  return ()
+
+(* T-19 AC6 *)
+let prove_t19_calendar_and_length_configurable () =
+  let cfg =
+    test_cfg
+      [
+        env "INTERVIEW_CALENDAR_ID" "other.example";
+        env "INTERVIEW_HOLD_DEFAULT_SECONDS" "7200";
+      ]
+  in
+  E2e_ffi.assert_ (cfg.calendar_id = "other.example") "T-19 AC6 calendar env";
+  E2e_ffi.assert_ (cfg.hold_default_seconds = 7200) "T-19 AC6 seconds env";
+  ready_hold ~cfg ~email:"cfg@acme.example" ()
+  >>= fun (deps, _sent, created, _hooks, _id, book) ->
+  post_hold deps ~book_token:book () >>= fun res ->
+  E2e_ffi.assert_ (response_status res = 201) "T-19 AC6 hold 201";
+  json_body res >>= fun (_, obj) ->
+  (match obj with
+  | None -> failwith "T-19 AC6 body"
+  | Some dict ->
+      E2e_ffi.assert_
+        (Interview_json.string_field dict "calendar_id" = "other.example")
+        "T-19 AC6 response calendar";
+      E2e_ffi.assert_
+        (Interview_json.string_field dict "end" = "2026-09-01T19:00:00.000Z")
+        "T-19 AC6 default length 7200s");
+  E2e_ffi.assert_
+    ((List.hd !created).calendar_id = "other.example")
+    "T-19 AC6 GCal uses INTERVIEW_CALENDAR_ID";
+  E2e_ffi.assert_
+    ((List.hd !created).end_iso = "2026-09-01T19:00:00.000Z")
+    "T-19 AC6 GCal uses INTERVIEW_HOLD_DEFAULT_SECONDS";
+  E2e_ffi.pass
+    "T-19 AC6 calendar id and default length change without a code change";
+  return ()
+
+(* T-19 AC7 *)
+let prove_t19_hold_cap () =
+  let unset =
+    Interview_config.of_source
+      ~source:
+        (source
+           [
+             env "TURSO_DATABASE_URL" "https://interview-me.test.invalid";
+             env "TURSO_AUTH_TOKEN" "test-turso-token";
+           ])
+      ()
+  in
+  E2e_ffi.assert_ (unset.hold_cap = 3) "T-19 AC7 default cap is 3";
+  let tables = Interview_store.Memory.create () in
+  let store = Interview_store.Memory.bind tables in
+  let cfg = test_cfg [ env "INTERVIEW_HOLD_CAP" "1" ] in
+  E2e_ffi.assert_ (cfg.hold_cap = 1) "T-19 AC7 INTERVIEW_HOLD_CAP changes N";
+  let webhook, hooks = Interview_webhook.capture () in
+  ready_hold ~cfg ~store ~webhook:(webhook, hooks)
+    ~callback:"https://hooks.example/t19-cap" ~email:"one@acme.example" ()
+  >>= fun (deps, sent, created, hooks, _id, book) ->
+  post_hold deps ~book_token:book () >>= fun first ->
+  E2e_ffi.assert_ (response_status first = 201) "T-19 AC7 first hold succeeds";
+  let events_after_first = List.length !created in
+  let mail_after_first = List.length (nathan_hold_mail sent) in
+  let booking_after_first = booking_count hooks in
+  let holds_after_first = Hashtbl.length tables.holds in
+  start_session deps ~email:"two@acme.example"
+    ~callback:"https://hooks.example/t19-cap-2" ()
+  >>= fun (id2, _) ->
+  complete_set deps id2 >>= fun () ->
+  verify_book deps sent id2 >>= fun book2 ->
+  post_hold deps ~book_token:book2 () >>= fun second ->
+  json_body second >>= fun (text, _) ->
+  E2e_ffi.assert_ (error_name text = "hold_cap") "T-19 AC7 N+1st is hold_cap";
+  E2e_ffi.assert_
+    (List.length !created = events_after_first)
+    "T-19 AC7 hold-cap refuse creates no extra event";
+  E2e_ffi.assert_
+    (List.length (nathan_hold_mail sent) = mail_after_first)
+    "T-19 AC7 hold-cap refuse sends no extra Nathan mail";
+  E2e_ffi.assert_
+    (booking_count hooks = booking_after_first)
+    "T-19 AC7 hold-cap refuse sends no extra booking.requested";
+  E2e_ffi.assert_
+    (not (Js.String.includes ~search:"interview.completed" text))
+    "T-19 AC7 hold-cap refuse is not interview.completed";
+  E2e_ffi.assert_
+    (Hashtbl.length tables.holds = holds_after_first)
+    "T-19 AC7 hold-cap refuse consumes no extra cap slot";
+  E2e_ffi.pass "T-19 AC7 work-domain hold cap; INTERVIEW_HOLD_CAP changes N";
+  return ()
+
+(* T-19 AC8 *)
+let prove_t19_nathan_mail_and_ban () =
+  ready_hold ~email:"banned@acme.example" ()
+  >>= fun (deps, sent, _created, _hooks, _id, book) ->
+  post_hold deps ~book_token:book () >>= fun res ->
+  E2e_ffi.assert_ (response_status res = 201) "T-19 AC8 hold created";
+  let mail = List.hd (nathan_hold_mail sent) in
+  E2e_ffi.assert_
+    (mail.to_ = "nathan@vegasbuckeye.com")
+    "T-19 AC8 hold mail goes to INTERVIEW_MAIL_TO default";
+  E2e_ffi.assert_
+    (Js.String.includes ~search:"Ban this address" mail.text
+    && Js.String.includes ~search:"Ban this domain" mail.text)
+    "T-19 AC8 mail names both ban links";
+  let addr_tok = harvest_ban_link "address" mail.text in
+  let dom_tok = harvest_ban_link "domain" mail.text in
+  E2e_ffi.assert_ (addr_tok <> "") "T-19 AC8 address token";
+  E2e_ffi.assert_ (dom_tok <> "") "T-19 AC8 domain token";
+  Interview_http.handle deps
+    (req "GET"
+       ("/interview/ban?kind=address&token=" ^ addr_tok)
+       "")
+  >>= fun ban_addr ->
+  E2e_ffi.assert_
+    (response_status ban_addr = 200)
+    "T-19 AC8 ban-address 200";
+  start_session deps ~email:"banned@acme.example" () >>= fun (rej_id, rej) ->
+  E2e_ffi.assert_
+    (error_name rej = "banned" || not (String.starts_with ~prefix:"ses_" rej_id))
+    "T-19 AC8 same address rejected after ban-address";
+  E2e_ffi.assert_
+    (not (has_session_id rej))
+    "T-19 AC8 banned address creates no session";
+  start_session deps ~email:"other@acme.example" () >>= fun (ok_id, _) ->
+  E2e_ffi.assert_
+    (String.starts_with ~prefix:"ses_" ok_id)
+    "T-19 AC8 other address on same domain still accepted";
+  Interview_http.handle deps
+    (req "GET" ("/interview/ban?kind=domain&token=" ^ dom_tok) "")
+  >>= fun ban_dom ->
+  E2e_ffi.assert_ (response_status ban_dom = 200) "T-19 AC8 ban-domain 200";
+  start_session deps ~email:"third@acme.example" () >>= fun (dom_id, dom_text) ->
+  E2e_ffi.assert_
+    (error_name dom_text = "banned" || not (has_session_id dom_text))
+    "T-19 AC8 same work domain rejected after ban-domain";
+  E2e_ffi.assert_
+    (not (String.starts_with ~prefix:"ses_" dom_id && has_session_id dom_text))
+    "T-19 AC8 banned domain creates no session";
+  E2e_ffi.pass
+    "T-19 AC8 Nathan hold mail has working ban-address and ban-domain links";
+  return ()
+
+(* T-19 AC9 *)
+let prove_t19_booking_requested_only () =
+  let webhook, hooks = Interview_webhook.capture () in
+  ready_hold ~webhook:(webhook, hooks)
+    ~callback:"https://hooks.example/t19-book" ()
+  >>= fun (deps, _sent, _created, hooks, _id, book) ->
+  let completed_before = completed_count hooks in
+  E2e_ffi.assert_
+    (completed_before = 1)
+    "T-19 AC9 set completion already sent interview.completed";
+  E2e_ffi.assert_
+    (booking_count hooks = 0)
+    "T-19 AC9 no booking.requested before hold";
+  post_hold deps ~book_token:book () >>= fun res ->
+  E2e_ffi.assert_ (response_status res = 201) "T-19 AC9 hold created";
+  E2e_ffi.assert_
+    (booking_count hooks = 1)
+    "T-19 AC9 callback receives booking.requested only when hold is created";
+  E2e_ffi.assert_
+    (completed_count hooks = completed_before)
+    "T-19 AC9 create_hold does not send interview.completed";
+  List.iter
+    (fun name ->
+      E2e_ffi.assert_
+        (name = "interview.completed" || name = "booking.requested")
+        "T-19 AC9 no third event name")
+    (webhook_event_names hooks);
+  post_hold deps ~book_token:"not-a-token" () >>= fun bad ->
+  json_body bad >>= fun (bad_text, _) ->
+  E2e_ffi.assert_
+    (error_name bad_text = "token_invalid")
+    "T-19 AC9 refuse does not create a hold";
+  E2e_ffi.assert_
+    (booking_count hooks = 1)
+    "T-19 AC9 refuse does not send another booking.requested";
+  E2e_ffi.pass
+    "T-19 AC9 booking.requested only on create; never interview.completed \
+     from hold";
+  return ()
+
+(* T-19 AC10 *)
+let prove_t19_missing_env_no_fake_hold () =
+  let tables = Interview_store.Memory.create () in
+  let store = Interview_store.Memory.bind tables in
+  let cfg_gcal =
+    Interview_config.of_source
+      ~source:
+        (source
+           [
+             env "TURSO_DATABASE_URL" "https://interview-me.test.invalid";
+             env "TURSO_AUTH_TOKEN" "test-turso-token";
+             env "INTERVIEW_MAGIC_LINK_SECRET" "test-secret-interview-me";
+             env "RESEND_API_KEY" "re_test_not_a_secret";
+           ])
+      ()
+  in
+  (match Interview_config.missing_calendar cfg_gcal with
+  | Some "GOOGLE_OAUTH_REFRESH_TOKEN" -> ()
+  | Some name -> failwith ("T-19 AC10 expected GCal name, got " ^ name)
+  | None -> failwith "T-19 AC10 missing GCal must not satisfy");
+  ready_hold ~cfg:cfg_gcal ~store ~email:"gcal@acme.example" ()
+  >>= fun (deps, sent, created, hooks, _id, book) ->
+  post_hold deps ~book_token:book () >>= fun res_gcal ->
+  json_body res_gcal >>= fun (text_gcal, _) ->
+  E2e_ffi.assert_
+    (error_name text_gcal = "missing_env")
+    "T-19 AC10 missing GCal is missing_env";
+  E2e_ffi.assert_ (!created = []) "T-19 AC10 missing GCal creates no event";
+  E2e_ffi.assert_
+    (Hashtbl.length tables.holds = 0)
+    "T-19 AC10 missing GCal persists no hold";
+  E2e_ffi.assert_
+    (nathan_hold_mail sent = [])
+    "T-19 AC10 missing GCal sends no hold mail";
+  E2e_ffi.assert_
+    (booking_count hooks = 0)
+    "T-19 AC10 missing GCal sends no booking.requested";
+  let tables2 = Interview_store.Memory.create () in
+  let store2 = Interview_store.Memory.bind tables2 in
+  let cfg_mail =
+    Interview_config.of_source
+      ~source:
+        (source
+           [
+             env "TURSO_DATABASE_URL" "https://interview-me.test.invalid";
+             env "TURSO_AUTH_TOKEN" "test-turso-token";
+             env "INTERVIEW_MAGIC_LINK_SECRET" "test-secret-interview-me";
+             env "GOOGLE_OAUTH_CLIENT_ID" "test-gcal-client";
+             env "GOOGLE_OAUTH_CLIENT_SECRET" "test-gcal-secret";
+             env "GOOGLE_OAUTH_REFRESH_TOKEN" "test-gcal-refresh";
+           ])
+      ()
+  in
+  (match Interview_config.missing_mail cfg_mail with
+  | Some "RESEND_API_KEY" -> ()
+  | Some name -> failwith ("T-19 AC10 expected RESEND_API_KEY, got " ^ name)
+  | None -> failwith "T-19 AC10 missing mail must not satisfy");
+  ready_hold ~store:store2 ~email:"mailmiss@acme.example" ()
+  >>= fun (deps2, sent2, created2, hooks2, _id2, book2) ->
+  let deps2 = { deps2 with Interview_service.cfg = cfg_mail } in
+  post_hold deps2 ~book_token:book2 () >>= fun res_mail ->
+  json_body res_mail >>= fun (text_mail, _) ->
+  E2e_ffi.assert_
+    (error_name text_mail = "missing_env")
+    "T-19 AC10 missing mail sender is missing_env";
+  E2e_ffi.assert_ (!created2 = []) "T-19 AC10 missing mail creates no event";
+  E2e_ffi.assert_
+    (Hashtbl.length tables2.holds = 0)
+    "T-19 AC10 missing mail persists no hold";
+  E2e_ffi.assert_
+    (nathan_hold_mail sent2 = [])
+    "T-19 AC10 missing mail sends no hold mail";
+  E2e_ffi.assert_
+    (booking_count hooks2 = 0)
+    "T-19 AC10 missing mail sends no booking.requested";
+  E2e_ffi.pass "T-19 AC10 missing GCal or mail sender is missing_env; no fake hold";
+  return ()
+
+(* T-19 AC11 *)
+let prove_t19_mail_fail_after_gcal () =
+  let tables = Interview_store.Memory.create () in
+  let store = Interview_store.Memory.bind tables in
+  let cfg = test_cfg [ env "INTERVIEW_HOLD_CAP" "1" ] in
+  ready_hold ~cfg ~store
+    ~callback:"https://hooks.example/t19-mailfail" ~email:"fail@acme.example"
+    ()
+  >>= fun (deps, _sent_ok, created, hooks, _id, book) ->
+  let deps =
+    {
+      deps with
+      Interview_service.mail =
+        Interview_mail.failing ~message:"resend 500: boom" ();
+    }
+  in
+  post_hold deps ~book_token:book () >>= fun fail_res ->
+  json_body fail_res >>= fun (fail_text, _) ->
+  E2e_ffi.assert_
+    (error_name fail_text <> "")
+    "T-19 AC11 mail-fail-after-GCal is an error";
+  E2e_ffi.assert_
+    (not
+       (Js.String.includes ~search:"hold_id" fail_text
+       && error_name fail_text = ""))
+    "T-19 AC11 mail-fail is not a successful hold";
+  E2e_ffi.assert_ (!created = []) "T-19 AC11 GCal cancelled after mail fail";
+  E2e_ffi.assert_
+    (Hashtbl.length tables.holds = 0)
+    "T-19 AC11 hold-cap not consumed";
+  E2e_ffi.assert_
+    (booking_count hooks = 0)
+    "T-19 AC11 booking.requested not sent";
+  let ok_mail, ok_sent = Interview_mail.capture () in
+  let deps_ok =
+    { deps with Interview_service.mail = ok_mail }
+  in
+  post_hold deps_ok ~book_token:book () >>= fun ok_res ->
+  E2e_ffi.assert_
+    (response_status ok_res = 201)
+    "T-19 AC11 book token remains usable; later success is still first of N";
+  json_body ok_res >>= fun (_, ok_obj) ->
+  (match ok_obj with
+  | None -> failwith "T-19 AC11 retry body"
+  | Some dict ->
+      E2e_ffi.assert_
+        (Interview_json.string_field dict "hold_id" <> "")
+        "T-19 AC11 retry created a hold");
+  E2e_ffi.assert_
+    (List.length (nathan_hold_mail ok_sent) = 1)
+    "T-19 AC11 retry sent Nathan hold mail";
+  E2e_ffi.assert_
+    (Hashtbl.length tables.holds = 1)
+    "T-19 AC11 later success consumes the first cap slot";
+  E2e_ffi.pass
+    "T-19 AC11 mail-fail-after-GCal cancels event; token reusable; cap free";
+  return ()
+
+(* T-19 AC12 *)
+let prove_t19_contact_openapi_mcp () =
+  let deps = memory_deps () in
+  Interview_http.handle deps (req "GET" "/openapi.json" "") >>= fun res ->
+  json_body res >>= fun (_, obj) ->
+  (match obj with
+  | None -> failwith "T-19 AC12 openapi"
+  | Some dict ->
+      let contact = Interview_json.object_field dict "info" in
+      let info_contact = Interview_json.object_field contact "contact" in
+      E2e_ffi.assert_
+        (Interview_json.string_field info_contact "email"
+        = "nathan@vegasbuckeye.com")
+        "T-19 AC12 OpenAPI contact email";
+      let paths = Interview_json.object_field dict "paths" in
+      let hold_req = request_schema paths "/interview/holds" "post" in
+      List.iter
+        (fun f ->
+          E2e_ffi.assert_
+            (List.exists (fun r -> r = f) (required_of hold_req))
+            ("T-19 AC12 hold required " ^ f))
+        [ "start"; "book_token" ];
+      let hold_201 = response_schema paths "/interview/holds" "post" "201" in
+      List.iter
+        (fun f ->
+          E2e_ffi.assert_ (has_prop hold_201 f) ("T-19 AC12 hold 201 names " ^ f))
+        [ "hold_id"; "session_id"; "start"; "end"; "calendar_id" ];
+      let verify_200 =
+        response_schema paths "/interview/verify" "get" "200"
+      in
+      List.iter
+        (fun f ->
+          E2e_ffi.assert_
+            (has_prop verify_200 f)
+            ("T-19 AC12 verify 200 names " ^ f))
+        [ "session_id"; "book_token"; "expires_at" ];
+      let ban_200 = response_schema paths "/interview/ban" "get" "200" in
+      List.iter
+        (fun f ->
+          E2e_ffi.assert_ (has_prop ban_200 f) ("T-19 AC12 ban 200 names " ^ f))
+        [ "banned"; "value" ];
+      let ban_path = Interview_json.object_field paths "/interview/ban" in
+      let ban_get = Interview_json.object_field ban_path "get" in
+      let params =
+        Interview_json.as_array (Interview_json.field ban_get "parameters")
+      in
+      let has_kind =
+        params
+        |> Array.exists (fun p ->
+               match Interview_json.as_object p with
+               | None -> false
+               | Some d -> Interview_json.string_field d "name" = "kind")
+      in
+      E2e_ffi.assert_ has_kind "T-19 AC12 ban documents kind");
+  Interview_http.handle deps (req "GET" "/mcp" "") >>= fun mcp_res ->
+  response_text mcp_res >>= fun mcp_text ->
+  assert_exact_tools "T-19 AC12 GET /mcp" (tool_names_of mcp_text);
+  let llms =
+    Node.Fs.readFileAsUtf8Sync
+      (Node.Path.join [| E2e_ffi.root; "public/llms.txt" |])
+  in
+  E2e_ffi.assert_
+    (Js.Re.test ~str:llms [%mel.re "/nathan@vegasbuckeye\\.com/"])
+    "T-19 AC12 contact nathan@vegasbuckeye.com";
+  E2e_ffi.assert_
+    (not
+       (Js.Re.test ~str:llms
+          [%mel.re "/\\d+\\s+(Main|Street|Ave|Avenue|Road|Rd)\\b/i"]))
+    "T-19 AC12 no street address";
+  E2e_ffi.pass
+    "T-19 AC12 contact + OpenAPI hold/verify/ban + MCP remains five names";
+  return ()
+
 let prove_function_bundle () =
   let interview_js =
     Node.Path.join [| E2e_ffi.root; "netlify/functions/interview.js" |]
@@ -2047,6 +2769,18 @@ let run () =
   >>= (fun () -> prove_t18_webhook_once_or_absent ())
   >>= (fun () -> prove_t18_webhook_failure_does_not_rollback ())
   >>= (fun () -> prove_t18_no_hold_or_verify ())
+  >>= (fun () -> prove_t19_required_incomplete ())
+  >>= (fun () -> prove_t19_token_invalid ())
+  >>= (fun () -> prove_t19_book_token_ttl ())
+  >>= (fun () -> prove_t19_invalid_start ())
+  >>= (fun () -> prove_t19_create_hold_and_mcp ())
+  >>= (fun () -> prove_t19_calendar_and_length_configurable ())
+  >>= (fun () -> prove_t19_hold_cap ())
+  >>= (fun () -> prove_t19_nathan_mail_and_ban ())
+  >>= (fun () -> prove_t19_booking_requested_only ())
+  >>= (fun () -> prove_t19_missing_env_no_fake_hold ())
+  >>= (fun () -> prove_t19_mail_fail_after_gcal ())
+  >>= (fun () -> prove_t19_contact_openapi_mcp ())
   >>= (fun () ->
          E2e_ffi.console_log "e2e/interview PASS";
          finish 0;

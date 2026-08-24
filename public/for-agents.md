@@ -22,7 +22,7 @@ Pages that have an HTML representation also serve `text/markdown; charset=utf-8`
 
 ## Interview-me
 
-Use interview-me to start a named session (`company`, `role`, `recruiter_name`, `work_email`) and ask questions against published facts. Unpublished facts are refused. Search experience with `GET /interview/experience?q=`. Request work-email verification with `POST /interview/sessions/{id}/verify-request` or MCP `request_verification` (the agent JSON does not include the magic URL or book token). The recruiter human clicks `GET /interview/verify?token=` once; the agent then receives a short-lived book token. The agent never needs inbox access. Contact remains nathan@vegasbuckeye.com. No street address is published.
+Use interview-me to start a named session (`company`, `role`, `recruiter_name`, `work_email`) and ask questions against published facts. Unpublished facts are refused. Search experience with `GET /interview/experience?q=`. Request work-email verification with `POST /interview/sessions/{id}/verify-request` or MCP `request_verification` (the agent JSON does not include the magic URL or book token). The recruiter human clicks `GET /interview/verify?token=` once; the agent then receives a short-lived book token. After the required question set is complete, `POST /interview/holds` (or MCP `create_hold`) with that book token creates a tentative calendar hold. The agent never needs inbox access. Contact remains nathan@vegasbuckeye.com. No street address is published.
 
 Company OAuth is not offered. For humans, use [contact](https://scull7.com/contact).
 

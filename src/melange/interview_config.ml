@@ -1,6 +1,7 @@
-(* Interview-me T-16/T-17/T-18 configuration. Free-email lists, Turso env,
-   magic-link TTL, mail sender, and the required question set are
-   overridable without a code change. INTERVIEW_STORE is ignored. *)
+(* Interview-me T-16 through T-19 configuration. Free-email lists, Turso
+   env, magic-link TTL, mail sender, required set, calendar, hold cap,
+   and hold length are overridable without a code change.
+   INTERVIEW_STORE is ignored. *)
 
 type t = {
   site_url : string;
@@ -9,11 +10,21 @@ type t = {
   turso_url : string option;
   turso_token : string option;
   mail_from : string;
+  mail_to : string;
   magic_link_secret : string option;
   magic_link_ttl_ms : float;
   book_token_ttl_ms : float;
   resend_api_key : string option;
   required_questions_raw : string option;
+  calendar_id : string;
+  hold_cap : int;
+  hold_default_seconds : int;
+  google_oauth_client_id : string option;
+  google_oauth_client_secret : string option;
+  google_oauth_refresh_token : string option;
+  google_service_account_json : string option;
+  google_client_email : string option;
+  google_private_key : string option;
 }
 
 type source = string -> string option
@@ -94,6 +105,10 @@ let of_source ?(source = process_source) () =
       (match source "INTERVIEW_MAIL_FROM" with
       | Some v -> String.trim v
       | None -> "nathan@vegasbuckeye.com");
+    mail_to =
+      (match source "INTERVIEW_MAIL_TO" with
+      | Some v -> String.trim v
+      | None -> "nathan@vegasbuckeye.com");
     magic_link_secret =
       (match source "INTERVIEW_MAGIC_LINK_SECRET" with
       | Some v -> Some (sanitize_secret v)
@@ -110,6 +125,28 @@ let of_source ?(source = process_source) () =
           | Some v -> Some (sanitize_secret v)
           | None -> None));
     required_questions_raw = source "INTERVIEW_REQUIRED_QUESTIONS";
+    calendar_id =
+      (match source "INTERVIEW_CALENDAR_ID" with
+      | Some id -> String.trim id
+      | None -> "scull7.com");
+    hold_cap = Interview_hold.parse_cap (source "INTERVIEW_HOLD_CAP");
+    hold_default_seconds =
+      Interview_hold.parse_seconds (source "INTERVIEW_HOLD_DEFAULT_SECONDS");
+    google_oauth_client_id =
+      (match source "GOOGLE_OAUTH_CLIENT_ID" with
+      | Some v -> Some v
+      | None -> source "GOOGLE_CLIENT_ID");
+    google_oauth_client_secret =
+      (match source "GOOGLE_OAUTH_CLIENT_SECRET" with
+      | Some v -> Some v
+      | None -> source "GOOGLE_CLIENT_SECRET");
+    google_oauth_refresh_token =
+      (match source "GOOGLE_OAUTH_REFRESH_TOKEN" with
+      | Some v -> Some v
+      | None -> source "GOOGLE_REFRESH_TOKEN");
+    google_service_account_json = source "GOOGLE_SERVICE_ACCOUNT_JSON";
+    google_client_email = source "GOOGLE_CLIENT_EMAIL";
+    google_private_key = source "GOOGLE_PRIVATE_KEY";
   }
 
 let load () = of_source ()
@@ -129,6 +166,27 @@ let missing_mail cfg =
   match cfg.resend_api_key with
   | Some _ -> None
   | None -> Some "RESEND_API_KEY"
+
+let has_google_oauth cfg =
+  match
+    ( cfg.google_oauth_client_id,
+      cfg.google_oauth_client_secret,
+      cfg.google_oauth_refresh_token )
+  with
+  | Some _, Some _, Some _ -> true
+  | _ -> false
+
+let has_google_service_account cfg =
+  match cfg.google_service_account_json with
+  | Some _ -> true
+  | None -> (
+      match (cfg.google_client_email, cfg.google_private_key) with
+      | Some _, Some _ -> true
+      | _ -> false)
+
+let missing_calendar cfg =
+  if has_google_oauth cfg || has_google_service_account cfg then None
+  else Some "GOOGLE_OAUTH_REFRESH_TOKEN"
 
 let required_ids cfg = Interview_required.parse cfg.required_questions_raw
 

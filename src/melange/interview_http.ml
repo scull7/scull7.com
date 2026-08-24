@@ -1,6 +1,6 @@
-(* HTTP + MCP surfaces for T-16/T-17/T-18. No GET-session. create_hold
-   stays fail-closed. Agent-facing verify-request never returns the magic
-   URL or book token. Ask JSON includes required-set progress. *)
+(* HTTP + MCP surfaces for T-16 through T-19. No GET-session.
+   create_hold is book-token-only POST /interview/holds. Agent-facing
+   verify-request never returns the magic URL or book token. *)
 
 type request
 type response
@@ -137,8 +137,9 @@ let mcp_tools =
       [ "session_id" ],
       [] );
     ( "create_hold",
-      "Reserved. Fail-closed until T-19. Requires a book token later; no \
-       calendar event is created without one.",
+      "Create a tentative Google Calendar hold. Body is start + book_token \
+       (optional end). Requires a completed required set and a work domain \
+       under the active-hold cap. Default hold length is 1 hour.",
       [ "start"; "book_token" ],
       [ "end" ] );
     ( "get_resume",
@@ -303,6 +304,56 @@ let handle_verify deps req url =
             ^ out.session_id ^ "</p>"))
       else return (json_ok (verify_json out))
 
+let hold_json (o : Interview_service.hold_output) =
+  Interview_json.obj
+    [
+      ("hold_id", Interview_json.str o.hold_id);
+      ("session_id", Interview_json.str o.session_id);
+      ("start", Interview_json.str o.start);
+      ("end", Interview_json.str o.end_);
+      ("status", Interview_json.str "tentative");
+      ("calendar_id", Interview_json.str o.calendar_id);
+      ("calendar_event_id", Interview_json.str o.calendar_event_id);
+      ("html_link", Interview_json.str o.html_link);
+    ]
+
+let handle_hold deps dict =
+  let start =
+    match field_any dict [ "start" ] with Some v -> v | None -> ""
+  in
+  let end_ = field_any dict [ "end" ] in
+  let book_token =
+    match field_any dict [ "book_token"; "bookToken" ] with
+    | Some v -> v
+    | None -> ""
+  in
+  Interview_service.create_hold deps ~start ~end_ ~book_token >>= function
+  | Error e -> return (error_res e)
+  | Ok out -> return (json_created (hold_json out))
+
+let handle_ban deps req url =
+  let kind =
+    match query_get url "kind" with Some k -> k | None -> "address"
+  in
+  match query_get url "token" with
+  | None -> return (error_res (Interview_service.Token_invalid "empty token"))
+  | Some token -> (
+      Interview_service.ban deps ~kind ~signed:token >>= function
+      | Error e -> return (error_res e)
+      | Ok (k, value) ->
+          if wants_html (request_headers req) then
+            return
+              (html_page "interview-me ban"
+                 ("<h1>Banned</h1><p>Banned this " ^ k ^ ": " ^ value ^ "</p>"))
+          else
+            return
+              (json_ok
+                 (Interview_json.obj
+                    [
+                      ("banned", Interview_json.str k);
+                      ("value", Interview_json.str value);
+                    ])))
+
 let handle_resume deps = return (json_ok (Interview_service.get_resume deps))
 
 let handle_experience deps query =
@@ -364,7 +415,7 @@ let mcp_call deps name args =
           | None -> "")
       >>= (function
       | Error e -> return (Error e)
-      | Ok () -> return (Ok (Interview_json.obj [])))
+      | Ok out -> return (Ok (hold_json out)))
   | "get_resume" -> return (Ok (Interview_service.get_resume deps))
   | other ->
       return (Error (Interview_service.Invalid ("unknown MCP tool: " ^ other)))
@@ -442,6 +493,9 @@ let handle_rest deps req url =
   else if path = "/mcp" && meth = "POST" then handle_mcp deps req
   else if path = "/interview/sessions" && meth = "POST" then
     read_object req >>= handle_start deps
+  else if path = "/interview/holds" && meth = "POST" then
+    read_object req >>= handle_hold deps
+  else if path = "/interview/ban" && meth = "GET" then handle_ban deps req url
   else if path = "/interview/resume" && (meth = "GET" || meth = "HEAD") then
     handle_resume deps
   else if path = "/interview/experience" && (meth = "GET" || meth = "HEAD") then

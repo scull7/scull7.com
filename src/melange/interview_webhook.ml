@@ -1,5 +1,5 @@
-(* Isolated webhook POST. interview.completed only — this card never
-   sends booking.requested. Tests inject capture / failing. *)
+(* Isolated webhook POST. interview.completed (T-18) and booking.requested
+   (T-19) are the only event names. Tests inject capture / failing. *)
 
 type sent = { url : string; body : string }
 
@@ -65,6 +65,29 @@ let interview_completed_body ~session ~required_progress ~required_remaining =
                Interview_required.string_array required_progress );
              ( "required_remaining",
                Interview_required.string_array required_remaining );
+           ]
+          @
+          match s.callback_url with
+          | Some u -> [ ("callback_url", Interview_json.str u) ]
+          | None -> []) );
+    ]
+
+let booking_requested_body ~session ~hold_id ~start ~end_ =
+  let (s : Interview_store.session) = session in
+  Interview_json.obj
+    [
+      ("event", Interview_json.str "booking.requested");
+      ( "payload",
+        Interview_json.obj
+          ([
+             ("session_id", Interview_json.str s.id);
+             ("company", Interview_json.str s.company);
+             ("role", Interview_json.str s.role);
+             ("recruiter_name", Interview_json.str s.recruiter_name);
+             ("work_email", Interview_json.str s.work_email);
+             ("hold_id", Interview_json.str hold_id);
+             ("start", Interview_json.str start);
+             ("end", Interview_json.str end_);
            ]
           @
           match s.callback_url with
