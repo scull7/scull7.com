@@ -1,5 +1,6 @@
-(* T-16 proofs: named Turso session, cited Q&A, resume/experience,
-   OpenAPI + MCP + llms.txt. Each AC has an inversion. *)
+(* T-16 + T-17 proofs: named Turso session, cited Q&A, human magic-link
+   verify / book token, resume/experience, OpenAPI + MCP + llms.txt.
+   Each AC has an inversion. *)
 
 let ( >>= ) p f = Js.Promise.then_ f p
 let return x = Js.Promise.resolve x
@@ -65,6 +66,9 @@ let test_cfg extras =
              env "TURSO_DATABASE_URL" "https://interview-me.test.invalid";
              env "TURSO_AUTH_TOKEN" "test-turso-token";
              env "INTERVIEW_SITE_URL" "https://scull7.com";
+             env "INTERVIEW_MAGIC_LINK_SECRET" "test-secret-interview-me";
+             env "RESEND_API_KEY" "re_test_not_a_secret";
+             env "INTERVIEW_MAIL_FROM" "nathan@vegasbuckeye.com";
            ]))
     ()
 
@@ -80,15 +84,31 @@ let test_corpus () =
   Interview_corpus.of_pages ~resume_json:(load_resume ())
     [ ("/about.md", about) ]
 
-let memory_deps ?cfg () =
+let memory_harness ?cfg ?now_ms ?store () =
   let cfg = match cfg with Some c -> c | None -> test_cfg [] in
-  {
-    Interview_service.now_ms = Interview_clock.now_ms;
-    random_id = Interview_clock.random_id;
-    cfg;
-    store = Interview_store.Memory.bind (Interview_store.Memory.create ());
-    corpus = test_corpus ();
-  }
+  let store =
+    match store with
+    | Some s -> s
+    | None -> Interview_store.Memory.bind (Interview_store.Memory.create ())
+  in
+  let mail, sent = Interview_mail.capture () in
+  let calendar, created = Interview_calendar.capture () in
+  ( {
+      Interview_service.now_ms =
+        (match now_ms with Some f -> f | None -> Interview_clock.now_ms);
+      random_id = Interview_clock.random_id;
+      cfg;
+      store;
+      corpus = test_corpus ();
+      mail;
+      calendar;
+    },
+    sent,
+    created )
+
+let memory_deps ?cfg ?now_ms () =
+  let deps, _, _ = memory_harness ?cfg ?now_ms () in
+  deps
 
 let json_body res =
   response_text res >>= fun text ->
@@ -239,7 +259,7 @@ let close_ok =
       ("response", Interview_json.obj [ ("type", Interview_json.str "close") ]);
     ]
 
-let handle_pipeline sessions body =
+let handle_pipeline sessions tokens body =
   match Interview_json.parse_object body with
   | None ->
       Interview_json.obj
@@ -288,6 +308,37 @@ let handle_pipeline sessions body =
                          match Hashtbl.find_opt sessions id with
                          | Some row -> execute_ok [ row ]
                          | None -> execute_ok [])
+                       else if
+                         Js.String.includes ~search:"INSERT INTO INTERVIEW_TOKENS"
+                           sql
+                       then (
+                         (match args with
+                         | token :: _ -> Hashtbl.replace tokens token args
+                         | [] -> ());
+                         execute_ok [])
+                       else if
+                         Js.String.includes ~search:"FROM INTERVIEW_TOKENS" sql
+                       then (
+                         let id =
+                           match List.rev args with
+                           | last :: _ -> last
+                           | [] -> ""
+                         in
+                         match Hashtbl.find_opt tokens id with
+                         | Some row -> execute_ok [ row ]
+                         | None -> execute_ok [])
+                       else if
+                         Js.String.includes ~search:"UPDATE INTERVIEW_TOKENS" sql
+                       then (
+                         let id =
+                           match args with t :: _ -> t | [] -> ""
+                         in
+                         (match Hashtbl.find_opt tokens id with
+                         | Some (t :: k :: s :: e :: _c :: created :: rest) ->
+                             Hashtbl.replace tokens id
+                               (t :: k :: s :: e :: "1" :: created :: rest)
+                         | _ -> ());
+                         execute_ok [])
                        else execute_ok []
                    | _ -> execute_ok []))
       in
@@ -296,6 +347,7 @@ let handle_pipeline sessions body =
 let start_fake_turso () : (string * (unit -> unit Js.Promise.t)) Js.Promise.t
     =
   let sessions : (string, string list) Hashtbl.t = Hashtbl.create 16 in
+  let tokens : (string, string list) Hashtbl.t = Hashtbl.create 16 in
   let server =
     create_server (fun incoming outgoing ->
         let chunks = ref "" in
@@ -313,7 +365,7 @@ let start_fake_turso () : (string * (unit -> unit Js.Promise.t)) Js.Promise.t
             else
               let payload =
                 Interview_json.json_stringify
-                  (handle_pipeline sessions !chunks)
+                  (handle_pipeline sessions tokens !chunks)
               in
               res_write_head outgoing 200 headers;
               res_end outgoing payload))
@@ -330,18 +382,25 @@ let start_fake_turso () : (string * (unit -> unit Js.Promise.t)) Js.Promise.t
           in
           resolve (url, stop) [@u]))
 
-let turso_deps url token =
+let turso_deps ?now_ms url token =
   let cfg =
     test_cfg
       [ env "TURSO_DATABASE_URL" url; env "TURSO_AUTH_TOKEN" token ]
   in
-  {
-    Interview_service.now_ms = Interview_clock.now_ms;
-    random_id = Interview_clock.random_id;
-    cfg;
-    store = Interview_store.turso ~url ~token ();
-    corpus = test_corpus ();
-  }
+  let mail, sent = Interview_mail.capture () in
+  let calendar, created = Interview_calendar.capture () in
+  ( {
+      Interview_service.now_ms =
+        (match now_ms with Some f -> f | None -> Interview_clock.now_ms);
+      random_id = Interview_clock.random_id;
+      cfg;
+      store = Interview_store.turso ~url ~token ();
+      corpus = test_corpus ();
+      mail;
+      calendar;
+    },
+    sent,
+    created )
 
 let echo_fields dict =
   ( Interview_json.string_field dict "company",
@@ -403,8 +462,8 @@ let prove_start_echo () =
 (* AC2: later ask on a fresh Turso client, not process memory *)
 let prove_later_ask_turso () =
   start_fake_turso () >>= fun (url, stop) ->
-  let deps1 = turso_deps url "test-turso-token" in
-  let deps2 = turso_deps url "test-turso-token" in
+  let deps1, _, _ = turso_deps url "test-turso-token" in
+  let deps2, _, _ = turso_deps url "test-turso-token" in
   E2e_ffi.assert_ (deps1.store != deps2.store) "AC2 distinct store clients";
   Interview_http.handle deps1
     (req "POST" "/interview/sessions"
@@ -453,7 +512,7 @@ let prove_later_ask_turso () =
         (Interview_json.opt_string_field dict "callback_url"
         = Some "https://hooks.example/later")
         "AC2 later ask callback_url");
-  let deps3 = turso_deps url "test-turso-token" in
+  let deps3, _, _ = turso_deps url "test-turso-token" in
   Interview_http.handle deps3
     (req "POST" "/mcp"
        (mcp_call "ask_nathan"
@@ -994,7 +1053,7 @@ let prove_mcp_tools () =
     (Js.String.includes ~search:"invalid" vr_text
     || Js.String.includes ~search:"not_found" vr_text
     || Js.String.includes ~search:"missing_env" vr_text)
-    "AC9 request_verification fail-closed";
+    "AC9 request_verification unknown session is a named error";
   E2e_ffi.pass "AC9 MCP tools/list exact five; HTTP-matching tools";
   return ()
 
@@ -1049,15 +1108,7 @@ let prove_missing_turso_env () =
   | Some name ->
       failwith ("AC11 INTERVIEW_STORE=memory expected TURSO url, got " ^ name)
   | None -> failwith "AC11 INTERVIEW_STORE=memory must not satisfy the store");
-  let deps =
-    {
-      Interview_service.now_ms = Interview_clock.now_ms;
-      random_id = Interview_clock.random_id;
-      cfg = cfg_mem;
-      store = Interview_store.of_config cfg_mem;
-      corpus = test_corpus ();
-    }
-  in
+  let deps, _, _ = memory_harness ~cfg:cfg_mem ~store:(Interview_store.of_config cfg_mem) () in
   Interview_http.handle deps
     (req "POST" "/interview/sessions" (start_body ()))
   >>= fun res ->
@@ -1099,6 +1150,452 @@ let prove_missing_turso_env () =
          E2e_ffi.pass
            "AC11 missing Turso env is missing_env; memory store is ignored";
          return ())
+
+let harvest_magic_link text =
+  match
+    E2e_ffi.capture1
+      [%mel.re
+        "/https:\\/\\/scull7\\.com\\/interview\\/verify\\?token=([^\\s<\"']+)/"]
+      text
+  with
+  | Some t -> t
+  | None -> failwith "magic link missing from mail"
+
+let agent_leaks_secrets text =
+  Js.String.includes ~search:"/interview/verify" text
+  || Js.String.includes ~search:"book_token" text
+  || Js.String.includes ~search:"bookToken" text
+
+let mcp_structured text =
+  match Interview_json.parse_object text with
+  | None -> None
+  | Some dict -> (
+      match Interview_json.as_object (Interview_json.field dict "result") with
+      | None -> None
+      | Some result ->
+          Interview_json.as_object
+            (Interview_json.field result "structuredContent"))
+
+let start_session deps ?(email = "recruiter@acme.example") () =
+  Interview_http.handle deps
+    (req "POST" "/interview/sessions" (start_body ~email ()))
+  >>= fun res ->
+  json_body res >>= fun (text, obj) ->
+  match obj with
+  | Some dict ->
+      return (Interview_json.string_field dict "id", text)
+  | None -> failwith ("start session: " ^ text)
+
+let ask_tensorwave deps id =
+  Interview_http.handle deps
+    (req "POST" ("/interview/sessions/" ^ id ^ "/ask")
+       (Interview_json.json_stringify
+          (Interview_json.obj
+             [
+               ( "question",
+                 Interview_json.str
+                   "What is Nathan doing at TensorWave on Relay?" );
+             ])))
+
+(* T-17 AC1 *)
+let prove_t17_verify_request_mail () =
+  let deps, sent, _ = memory_harness () in
+  start_session deps ~email:"pat@acme.example" () >>= fun (id, _) ->
+  Interview_http.handle deps
+    (req "POST" ("/interview/sessions/" ^ id ^ "/verify-request") "")
+  >>= fun res ->
+  E2e_ffi.assert_
+    (response_status res = 202 || response_status res = 200)
+    "T-17 AC1 verify-request accepted";
+  json_body res >>= fun (text, obj) ->
+  E2e_ffi.assert_ (not (agent_leaks_secrets text))
+    "T-17 AC1 agent JSON has no magic URL or book token";
+  (match obj with
+  | None -> failwith "T-17 AC1 body"
+  | Some dict ->
+      E2e_ffi.assert_
+        (Interview_json.string_field dict "session_id" = id)
+        "T-17 AC1 session_id");
+  E2e_ffi.assert_ (List.length !sent = 1) "T-17 AC1 one mail";
+  let mail = List.hd !sent in
+  E2e_ffi.assert_ (mail.to_ = "pat@acme.example")
+    "T-17 AC1 mail only to session work email";
+  E2e_ffi.assert_
+    (not (Js.String.includes ~search:"123 Main" mail.text))
+    "T-17 AC1 mail has no street address";
+  ignore (harvest_magic_link mail.text);
+  Interview_http.handle deps
+    (req "POST" "/mcp"
+       (mcp_call "request_verification"
+          (Interview_json.obj [ ("session_id", Interview_json.str id) ])))
+  >>= fun mcp_res ->
+  E2e_ffi.assert_ (response_status mcp_res = 200) "T-17 AC1 MCP accepted";
+  response_text mcp_res >>= fun mcp_text ->
+  E2e_ffi.assert_ (not (agent_leaks_secrets mcp_text))
+    "T-17 AC1 MCP has no magic URL or book token";
+  (match mcp_structured mcp_text with
+  | None -> failwith "T-17 AC1 MCP structured"
+  | Some dict ->
+      E2e_ffi.assert_
+        (Interview_json.string_field dict "session_id" = id)
+        "T-17 AC1 MCP session_id";
+      E2e_ffi.assert_
+        (Interview_json.as_bool (Interview_json.field dict "sent"))
+        "T-17 AC1 MCP sent");
+  E2e_ffi.assert_ (List.length !sent = 2) "T-17 AC1 MCP also sent mail";
+  List.iter
+    (fun (m : Interview_mail.message) ->
+      E2e_ffi.assert_ (m.to_ = "pat@acme.example")
+        "T-17 AC1 every mail goes to the session work email")
+    !sent;
+  E2e_ffi.pass "T-17 AC1 verify-request mails work email; agent JSON is clean";
+  return ()
+
+(* T-17 AC2 *)
+let prove_t17_verify_never_created () =
+  let deps, sent, _ = memory_harness () in
+  Interview_http.handle deps
+    (req "POST" "/interview/sessions/ses_never/verify-request" "")
+  >>= fun res ->
+  E2e_ffi.assert_
+    (response_status res = 404
+    || (response_status res >= 400 && response_status res < 500))
+    "T-17 AC2 never-created is 4xx/404";
+  json_body res >>= fun (text, _) ->
+  E2e_ffi.assert_ (error_name text = "not_found") "T-17 AC2 error=not_found";
+  E2e_ffi.assert_ (not (agent_leaks_secrets text)) "T-17 AC2 no book token";
+  E2e_ffi.assert_ (!sent = []) "T-17 AC2 no mail";
+  E2e_ffi.pass "T-17 AC2 verify-request unknown id is not_found";
+  return ()
+
+(* T-17 AC3 *)
+let prove_t17_human_verify_issues_book_token () =
+  let deps, sent, _ = memory_harness () in
+  start_session deps () >>= fun (id, _) ->
+  Interview_http.handle deps
+    (req "POST" ("/interview/sessions/" ^ id ^ "/verify-request") "")
+  >>= fun _ ->
+  let token = harvest_magic_link (List.hd !sent).text in
+  Interview_http.handle deps
+    (req "GET" ("/interview/verify?token=" ^ token) "")
+  >>= fun res ->
+  E2e_ffi.assert_ (response_status res = 200) "T-17 AC3 verify 200";
+  json_body res >>= fun (text, obj) ->
+  (match obj with
+  | None -> failwith "T-17 AC3 body"
+  | Some dict ->
+      E2e_ffi.assert_
+        (Interview_json.string_field dict "session_id" = id)
+        "T-17 AC3 session_id of requesting session";
+      let book = Interview_json.string_field dict "book_token" in
+      E2e_ffi.assert_ (book <> "") "T-17 AC3 book_token";
+      E2e_ffi.assert_
+        (Interview_json.string_field dict "expires_at" <> "")
+        "T-17 AC3 expires_at");
+  let forged =
+    [
+      ("", "empty");
+      ("not-a-token", "forged");
+      ("deadbeef.0000000000000000000000000000000000000000000000000000000000000000", "bad sig");
+    ]
+  in
+  let rec loop = function
+    | [] -> return ()
+    | (tok, label) :: rest ->
+        let path =
+          if tok = "" then "/interview/verify?token="
+          else "/interview/verify?token=" ^ tok
+        in
+        Interview_http.handle deps (req "GET" path "") >>= fun bad ->
+        json_body bad >>= fun (bad_text, _) ->
+        E2e_ffi.assert_
+          (error_name bad_text = "token_invalid")
+          ("T-17 AC3 " ^ label ^ " token_invalid");
+        E2e_ffi.assert_
+          (not (Js.String.includes ~search:"book_token" bad_text)
+          || Js.String.includes ~search:"token_invalid" bad_text
+             && not
+                  (Js.Re.test ~str:bad_text
+                     [%mel.re "/\"book_token\"\\s*:\\s*\"[^\"]+\"/"]))
+          ("T-17 AC3 " ^ label ^ " no book token");
+        loop rest
+  in
+  loop forged >>= fun () ->
+  Interview_http.handle deps (req "GET" "/interview/verify" "") >>= fun missing ->
+  json_body missing >>= fun (missing_text, _) ->
+  E2e_ffi.assert_
+    (error_name missing_text = "token_invalid")
+    "T-17 AC3 missing token is token_invalid";
+  E2e_ffi.assert_
+    (not
+       (Js.Re.test ~str:missing_text
+          [%mel.re "/\"book_token\"\\s*:\\s*\"[^\"]+\"/"]))
+    "T-17 AC3 missing token has no book token";
+  ignore text;
+  E2e_ffi.pass "T-17 AC3 human verify issues book token; forged/empty invalid";
+  return ()
+
+(* T-17 AC4 *)
+let prove_t17_session_scope () =
+  let deps, sent, _ = memory_harness () in
+  start_session deps ~email:"a@acme.example" () >>= fun (id_a, _) ->
+  start_session deps ~email:"b@acme.example" () >>= fun (id_b, _) ->
+  E2e_ffi.assert_ (id_a <> id_b) "T-17 AC4 two sessions";
+  Interview_http.handle deps
+    (req "POST" ("/interview/sessions/" ^ id_a ^ "/verify-request") "")
+  >>= fun _ ->
+  let token_a = harvest_magic_link (List.hd !sent).text in
+  Interview_http.handle deps
+    (req "GET" ("/interview/verify?token=" ^ token_a) "")
+  >>= fun res ->
+  json_body res >>= fun (_, obj) ->
+  (match obj with
+  | None -> failwith "T-17 AC4 body"
+  | Some dict ->
+      let sid = Interview_json.string_field dict "session_id" in
+      E2e_ffi.assert_ (sid = id_a) "T-17 AC4 session A link returns A";
+      E2e_ffi.assert_ (sid <> id_b) "T-17 AC4 session A link never returns B");
+  E2e_ffi.pass "T-17 AC4 magic link is session-scoped";
+  return ()
+
+(* T-17 AC5 *)
+let prove_t17_magic_link_single_use () =
+  let deps, sent, _ = memory_harness () in
+  start_session deps () >>= fun (id, _) ->
+  Interview_http.handle deps
+    (req "POST" ("/interview/sessions/" ^ id ^ "/verify-request") "")
+  >>= fun _ ->
+  let token = harvest_magic_link (List.hd !sent).text in
+  Interview_http.handle deps
+    (req "GET" ("/interview/verify?token=" ^ token) "")
+  >>= fun first ->
+  E2e_ffi.assert_ (response_status first = 200) "T-17 AC5 first GET 200";
+  json_body first >>= fun (first_text, _) ->
+  E2e_ffi.assert_
+    (Js.Re.test ~str:first_text
+       [%mel.re "/\"book_token\"\\s*:\\s*\"[^\"]+\"/"])
+    "T-17 AC5 first GET has book token";
+  Interview_http.handle deps
+    (req "GET" ("/interview/verify?token=" ^ token) "")
+  >>= fun second ->
+  json_body second >>= fun (second_text, _) ->
+  E2e_ffi.assert_
+    (error_name second_text = "token_invalid")
+    "T-17 AC5 second GET token_invalid";
+  E2e_ffi.assert_
+    (not
+       (Js.Re.test ~str:second_text
+          [%mel.re "/\"book_token\"\\s*:\\s*\"[^\"]+\"/"]))
+    "T-17 AC5 second GET has no book token";
+  E2e_ffi.pass "T-17 AC5 magic-link token is single-use";
+  return ()
+
+(* T-17 AC6 *)
+let prove_t17_magic_link_ttl () =
+  let unset =
+    Interview_config.of_source
+      ~source:
+        (source
+           [
+             env "TURSO_DATABASE_URL" "https://interview-me.test.invalid";
+             env "TURSO_AUTH_TOKEN" "test-turso-token";
+           ])
+      ()
+  in
+  E2e_ffi.assert_
+    (unset.magic_link_ttl_ms = 86_400_000.)
+    "T-17 AC6 default unset TTL is 86400000";
+  let now = ref 1_700_000_000_000. in
+  let cfg = test_cfg [ env "INTERVIEW_MAGIC_LINK_TTL_MS" "2000" ] in
+  E2e_ffi.assert_ (cfg.magic_link_ttl_ms = 2000.) "T-17 AC6 env TTL is 2000";
+  let deps, sent, _ = memory_harness ~cfg ~now_ms:(fun () -> !now) () in
+  start_session deps () >>= fun (id, _) ->
+  Interview_http.handle deps
+    (req "POST" ("/interview/sessions/" ^ id ^ "/verify-request") "")
+  >>= fun _ ->
+  let token = harvest_magic_link (List.hd !sent).text in
+  now := !now +. 2001.;
+  Interview_http.handle deps
+    (req "GET" ("/interview/verify?token=" ^ token) "")
+  >>= fun res ->
+  json_body res >>= fun (text, _) ->
+  E2e_ffi.assert_ (error_name text = "token_invalid")
+    "T-17 AC6 expired token_invalid";
+  E2e_ffi.assert_
+    (not
+       (Js.Re.test ~str:text [%mel.re "/\"book_token\"\\s*:\\s*\"[^\"]+\"/"]))
+    "T-17 AC6 expired has no book token";
+  E2e_ffi.pass "T-17 AC6 tester clock expires magic link; default stays 86400000";
+  return ()
+
+(* T-17 AC7 *)
+let prove_t17_qa_before_after_no_hold () =
+  let deps, sent, created = memory_harness () in
+  start_session deps () >>= fun (id, _) ->
+  ask_tensorwave deps id >>= fun before ->
+  E2e_ffi.assert_ (response_status before = 200) "T-17 AC7 ask before verify";
+  json_body before >>= fun (before_text, _) ->
+  E2e_ffi.assert_
+    (Js.String.includes ~search:"TensorWave" before_text)
+    "T-17 AC7 cited before verify";
+  Interview_http.handle deps
+    (req "POST" ("/interview/sessions/" ^ id ^ "/verify-request") "")
+  >>= fun _ ->
+  let token = harvest_magic_link (List.hd !sent).text in
+  Interview_http.handle deps
+    (req "GET" ("/interview/verify?token=" ^ token) "")
+  >>= fun verified ->
+  E2e_ffi.assert_ (response_status verified = 200) "T-17 AC7 verify 200";
+  ask_tensorwave deps id >>= fun after ->
+  E2e_ffi.assert_ (response_status after = 200) "T-17 AC7 ask after verify";
+  json_body after >>= fun (after_text, _) ->
+  E2e_ffi.assert_
+    (Js.String.includes ~search:"TensorWave" after_text)
+    "T-17 AC7 cited after verify";
+  Interview_http.handle deps
+    (req "POST" "/mcp"
+       (mcp_call "create_hold"
+          (Interview_json.obj
+             [
+               ("start", Interview_json.str "2026-09-01T17:00:00.000Z");
+               ("book_token", Interview_json.str "");
+             ])))
+  >>= fun hold1 ->
+  response_text hold1 >>= fun hold1_text ->
+  E2e_ffi.assert_
+    (Js.String.includes ~search:"\"error\"" hold1_text)
+    "T-17 AC7 create_hold no token is an error";
+  E2e_ffi.assert_
+    (not
+       (Js.String.includes ~search:"calendar_event_id" hold1_text
+       || Js.String.includes ~search:"hold_id" hold1_text))
+    "T-17 AC7 no calendar event without book token";
+  Interview_http.handle deps
+    (req "POST" "/mcp"
+       (mcp_call "create_hold"
+          (Interview_json.obj
+             [
+               ("start", Interview_json.str "2026-09-01T17:00:00.000Z");
+               ("book_token", Interview_json.str "not-a-token");
+             ])))
+  >>= fun hold2 ->
+  response_text hold2 >>= fun hold2_text ->
+  E2e_ffi.assert_
+    (not
+       (Js.String.includes ~search:"calendar_event_id" hold2_text
+       || Js.String.includes ~search:"hold_id" hold2_text))
+    "T-17 AC7 invalid book token creates no calendar event";
+  E2e_ffi.assert_ (!created = []) "T-17 AC7 calendar action was never called";
+  E2e_ffi.pass "T-17 AC7 Q&A works before/after verify; no calendar event";
+  return ()
+
+(* T-17 AC8 *)
+let prove_t17_missing_env_no_token () =
+  let tables = Interview_store.Memory.create () in
+  let store = Interview_store.Memory.bind tables in
+  let cfg_secret =
+    Interview_config.of_source
+      ~source:
+        (source
+           [
+             env "TURSO_DATABASE_URL" "https://interview-me.test.invalid";
+             env "TURSO_AUTH_TOKEN" "test-turso-token";
+             env "RESEND_API_KEY" "re_test_not_a_secret";
+           ])
+      ()
+  in
+  (match Interview_config.missing_magic_secret cfg_secret with
+  | Some "INTERVIEW_MAGIC_LINK_SECRET" -> ()
+  | Some name -> failwith ("T-17 AC8 expected magic secret, got " ^ name)
+  | None -> failwith "T-17 AC8 missing secret must not satisfy");
+  let deps_secret, sent_secret, _ =
+    memory_harness ~cfg:cfg_secret ~store ()
+  in
+  start_session deps_secret () >>= fun (id, _) ->
+  Interview_http.handle deps_secret
+    (req "POST" ("/interview/sessions/" ^ id ^ "/verify-request") "")
+  >>= fun res_secret ->
+  json_body res_secret >>= fun (text_secret, _) ->
+  E2e_ffi.assert_
+    (error_name text_secret = "missing_env")
+    "T-17 AC8 missing secret is missing_env";
+  E2e_ffi.assert_ (not (agent_leaks_secrets text_secret))
+    "T-17 AC8 missing secret issues no book token";
+  E2e_ffi.assert_ (!sent_secret = []) "T-17 AC8 missing secret sends no mail";
+  E2e_ffi.assert_
+    (Hashtbl.length tables.tokens = 0)
+    "T-17 AC8 missing secret issues no stored token";
+  let cfg_mail =
+    Interview_config.of_source
+      ~source:
+        (source
+           [
+             env "TURSO_DATABASE_URL" "https://interview-me.test.invalid";
+             env "TURSO_AUTH_TOKEN" "test-turso-token";
+             env "INTERVIEW_MAGIC_LINK_SECRET" "test-secret-interview-me";
+           ])
+      ()
+  in
+  (match Interview_config.missing_mail cfg_mail with
+  | Some "RESEND_API_KEY" -> ()
+  | Some name -> failwith ("T-17 AC8 expected RESEND_API_KEY, got " ^ name)
+  | None -> failwith "T-17 AC8 missing mail must not satisfy");
+  let tables2 = Interview_store.Memory.create () in
+  let deps_mail, sent_mail, _ =
+    memory_harness ~cfg:cfg_mail
+      ~store:(Interview_store.Memory.bind tables2) ()
+  in
+  start_session deps_mail () >>= fun (id2, _) ->
+  Interview_http.handle deps_mail
+    (req "POST" ("/interview/sessions/" ^ id2 ^ "/verify-request") "")
+  >>= fun res_mail ->
+  json_body res_mail >>= fun (text_mail, _) ->
+  E2e_ffi.assert_
+    (error_name text_mail = "missing_env")
+    "T-17 AC8 missing mail sender is missing_env";
+  E2e_ffi.assert_ (not (agent_leaks_secrets text_mail))
+    "T-17 AC8 missing mail issues no book token";
+  E2e_ffi.assert_ (!sent_mail = []) "T-17 AC8 missing mail sends no mail";
+  E2e_ffi.assert_
+    (Hashtbl.length tables2.tokens = 0)
+    "T-17 AC8 missing mail issues no stored token";
+  E2e_ffi.pass "T-17 AC8 missing secret or mail sender is missing_env";
+  return ()
+
+(* T-17 AC9 *)
+let prove_t17_contact_no_street () =
+  let llms =
+    Node.Fs.readFileAsUtf8Sync
+      (Node.Path.join [| E2e_ffi.root; "public/llms.txt" |])
+  in
+  let agents =
+    Node.Fs.readFileAsUtf8Sync
+      (Node.Path.join [| E2e_ffi.root; "public/for-agents.md" |])
+  in
+  let deps, sent, _ = memory_harness () in
+  start_session deps () >>= fun (id, _) ->
+  Interview_http.handle deps
+    (req "POST" ("/interview/sessions/" ^ id ^ "/verify-request") "")
+  >>= fun _ ->
+  let mail = List.hd !sent in
+  let blobs = [ llms; agents; mail.text; mail.html ] in
+  List.iter
+    (fun blob ->
+      E2e_ffi.assert_
+        (Js.Re.test ~str:blob [%mel.re "/nathan@vegasbuckeye\\.com/"])
+        "T-17 AC9 contact nathan@vegasbuckeye.com";
+      E2e_ffi.assert_
+        (not
+           (Js.Re.test ~str:blob
+              [%mel.re "/\\d+\\s+(Main|Street|Ave|Avenue|Road|Rd)\\b/i"]))
+        "T-17 AC9 no street address")
+    blobs;
+  E2e_ffi.assert_
+    (Js.String.includes ~search:"never needs" mail.text
+    || Js.String.includes ~search:"never needs" mail.html)
+    "T-17 AC9 agent never needs inbox access";
+  E2e_ffi.pass "T-17 AC9 contact + no street + agent has no inbox";
+  return ()
 
 let prove_function_bundle () =
   let interview_js =
@@ -1150,6 +1647,15 @@ let run () =
   >>= (fun () -> prove_mcp_tools ())
   >>= (fun () -> prove_llms_txt ())
   >>= (fun () -> prove_missing_turso_env ())
+  >>= (fun () -> prove_t17_verify_request_mail ())
+  >>= (fun () -> prove_t17_verify_never_created ())
+  >>= (fun () -> prove_t17_human_verify_issues_book_token ())
+  >>= (fun () -> prove_t17_session_scope ())
+  >>= (fun () -> prove_t17_magic_link_single_use ())
+  >>= (fun () -> prove_t17_magic_link_ttl ())
+  >>= (fun () -> prove_t17_qa_before_after_no_hold ())
+  >>= (fun () -> prove_t17_missing_env_no_token ())
+  >>= (fun () -> prove_t17_contact_no_street ())
   >>= (fun () ->
          E2e_ffi.console_log "e2e/interview PASS";
          finish 0;

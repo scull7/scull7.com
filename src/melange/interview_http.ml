@@ -1,5 +1,6 @@
-(* HTTP + MCP surfaces for T-16. No GET-session. Verify/hold MCP names
-   fail closed. *)
+(* HTTP + MCP surfaces for T-16/T-17. No GET-session. create_hold stays
+   fail-closed. Agent-facing verify-request never returns the magic URL
+   or book token. *)
 
 type request
 type response
@@ -126,11 +127,14 @@ let mcp_tools =
       [ "session_id"; "question" ],
       [] );
     ( "request_verification",
-      "Reserved. Fail-closed in this slice.",
+      "Send a magic-link email to the session work email. The agent never \
+       reads inbox. The human click on GET /interview/verify issues a book \
+       token. This tool does not return the magic URL or book token.",
       [ "session_id" ],
       [] );
     ( "create_hold",
-      "Reserved. Fail-closed in this slice.",
+      "Reserved. Fail-closed until T-19. Requires a book token later; no \
+       calendar event is created without one.",
       [ "start"; "book_token" ],
       [ "end" ] );
     ( "get_resume",
@@ -242,6 +246,59 @@ let handle_ask deps session_id dict =
   | Error e -> return (error_res e)
   | Ok out -> return (json_ok (ask_json out))
 
+let verify_request_json (o : Interview_service.verify_request_output) =
+  Interview_json.obj
+    [
+      ("session_id", Interview_json.str o.session_id);
+      ("sent", Interview_json.bool true);
+    ]
+
+let verify_json (o : Interview_service.verify_output) =
+  Interview_json.obj
+    [
+      ("session_id", Interview_json.str o.session_id);
+      ("book_token", Interview_json.str o.book_token);
+      ("expires_at", Interview_json.str o.expires_at);
+    ]
+
+let handle_verify_request deps session_id =
+  Interview_service.request_verification deps ~session_id >>= function
+  | Error e -> return (error_res e)
+  | Ok out -> return (json_status 202 (verify_request_json out))
+
+let header_get headers name =
+  Js.Null.toOption (headers_get_null headers name)
+
+let wants_html headers =
+  match header_get headers "accept" with
+  | None -> false
+  | Some a ->
+      let a = String.lowercase_ascii a in
+      Js.String.includes ~search:"text/html" a
+      && not (Js.String.includes ~search:"application/json" a)
+
+let html_page title body =
+  respond 200 "text/html; charset=utf-8"
+    ("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"/><title>"
+   ^ title ^ "</title></head><body>" ^ body ^ "</body></html>")
+    []
+
+let handle_verify deps req url =
+  let token =
+    match query_get url "token" with Some t -> String.trim t | None -> ""
+  in
+  Interview_service.verify deps ~signed:token >>= function
+  | Error e -> return (error_res e)
+  | Ok out ->
+      if wants_html (request_headers req) then
+        return
+          (html_page "interview-me book token"
+             ("<h1>Work email verified</h1><p>Give this book token to your \
+               recruiter agent. It is short-lived and scoped to this \
+               session.</p><pre>" ^ out.book_token ^ "</pre><p>Session "
+            ^ out.session_id ^ "</p>"))
+      else return (json_ok (verify_json out))
+
 let handle_resume deps = return (json_ok (Interview_service.get_resume deps))
 
 let handle_experience deps query =
@@ -291,7 +348,7 @@ let mcp_call deps name args =
       in
       Interview_service.request_verification deps ~session_id >>= (function
       | Error e -> return (Error e)
-      | Ok () -> return (Ok (Interview_json.obj [])))
+      | Ok out -> return (Ok (verify_request_json out)))
   | "create_hold" ->
       Interview_service.create_hold deps
         ~start:
@@ -386,10 +443,14 @@ let handle_rest deps req url =
   else if path = "/interview/experience" && (meth = "GET" || meth = "HEAD") then
     handle_experience deps
       (match query_get url "q" with Some q -> q | None -> "")
+  else if path = "/interview/verify" && meth = "GET" then
+    handle_verify deps req url
   else
     match (meth, path_segments path) with
     | "POST", [ "interview"; "sessions"; id; "ask" ] ->
         read_object req >>= handle_ask deps id
+    | "POST", [ "interview"; "sessions"; id; "verify-request" ] ->
+        handle_verify_request deps id
     | _ ->
         return
           (respond 404 "application/json; charset=utf-8"

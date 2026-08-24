@@ -13,9 +13,12 @@
  (wrapped false)
  (modules
   interview_json
-  interview_config
   interview_clock
+  interview_token
+  interview_config
   interview_http_fetch
+  interview_mail
+  interview_calendar
   interview_corpus
   interview_store
   interview_service
