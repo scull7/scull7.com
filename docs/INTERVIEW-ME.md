@@ -60,11 +60,26 @@ When a hold is created, Nathan receives a hold notification email with an easy o
 
 A booking request creates a **tentative calendar hold**.
 
-**Backend, 2026-08-24:** bookings are CRUD'd by **cal.rs**, a separate Rust service — not Google Calendar. scull7.com keeps an isolated calendar port; the cal.rs API does not exist yet, so production stays fail-closed (`missing_env:INTERVIEW_CAL_API_URL`) until it is wired.
+**Backend, 2026-08-25:** bookings are created on **calrs** (<https://cal.rs>), a self-hosted Rust scheduling service running on `nate-cal-1` and served at `https://cal.scull7.com` — not Google Calendar. scull7.com keeps an isolated calendar port and speaks calrs's public booking form, because calrs ships no REST API.
+
+Required env, all three or production is fail-closed with `missing_env`:
+
+| Variable | Meaning |
+|----------|---------|
+| `INTERVIEW_CAL_API_URL` | calrs base URL, e.g. `https://cal.scull7.com` |
+| `INTERVIEW_CAL_USERNAME` | calrs host username that owns the event type |
+| `INTERVIEW_CAL_EVENT_SLUG` | event-type slug holds are booked against |
+
+Two constraints come from calrs and are not ours to set:
+
+- **calrs owns the meeting length.** The event type's duration wins; `INTERVIEW_HOLD_DEFAULT_SECONDS` now only shapes the hold row we store and the active-hold cap math.
+- **The event type must not require confirmation.** calrs returns a cancel handle only for non-pending bookings, so a requires-confirmation event type would produce holds scull7.com could never release. That case fails loudly rather than silently stranding a booking.
+
+A requested start that is not an open calrs slot is refused with `slot_unavailable`; nothing is stored, mailed, or webhooked.
 
 Required before a hold: verified work email, a short-lived book token for that session, a completed required question set (a refusal does not count), and a work domain under the active-hold cap.
 
-Create-hold inputs: start, end, book token. Result: a tentative calendar event. Default hold length is **1 hour**.
+Create-hold inputs: start, end, book token. Result: a tentative calendar event. The stored hold defaults to **1 hour**; the booked meeting's real length comes from the calrs event type.
 
 Holds go to the **default scull7.com calendar**. Which calendar is used **must** be configurable — do not hard-code it forever.
 

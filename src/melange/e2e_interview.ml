@@ -71,6 +71,8 @@ let test_cfg extras =
              env "RESEND_API_KEY" "re_test_not_a_secret";
              env "INTERVIEW_MAIL_FROM" "nathan@vegasbuckeye.com";
              env "INTERVIEW_CAL_API_URL" "https://cal.test.invalid";
+             env "INTERVIEW_CAL_USERNAME" "nate";
+             env "INTERVIEW_CAL_EVENT_SLUG" "interview-hold";
            ]))
     ()
 
@@ -2493,23 +2495,254 @@ let prove_t19_booking_requested_only () =
      from hold";
   return ()
 
+(* T-19b: the real calrs backend. calrs has no REST API, so these fakes feed
+   the client the HTML its booking form actually returns. *)
+
+let fake_response ~ok ~status ~body : Interview_http_fetch.response =
+  Obj.magic [%mel.obj { ok; status; text = (fun () -> Js.Promise.resolve body) }]
+
+let recording_post ?(ok = true) ?(status = 200) ~body () =
+  let calls = ref [] in
+  let post url ~headers ~body:sent =
+    calls := (url, headers, sent) :: !calls;
+    Js.Promise.resolve (fake_response ~ok ~status ~body)
+  in
+  (post, calls)
+
+let calrs_port ?ok ?status ~body () =
+  let post, calls = recording_post ?ok ?status ~body () in
+  ( Interview_calrs.port ~post ~base:"https://cal.test.invalid" ~username:"nate"
+      ~slug:"interview-hold" (),
+    calls )
+
+(* calrs escapes interpolated URLs, so this is the shape a real confirmation
+   page has. *)
+let calrs_ok_body =
+  "<a href=\"&#x2f;booking&#x2f;ics&#x2f;tok_abc123XY\" download>Add to \
+   calendar</a>"
+
+let calrs_pending_body = "<h1>Pending confirmation</h1>"
+let calrs_taken_body = "This slot is no longer available."
+let calrs_no_event_body = "Event type not found."
+let calrs_unknown_body = "<html>something else</html>"
+
+let hold_request start_iso : Interview_calendar.request =
+  {
+    calendar_id = "scull7.com";
+    summary = "Interview hold: Acme / Staff Engineer";
+    description = "Tentative hold from interview-me.";
+    start_iso;
+    end_iso = "2026-09-01T18:00:00.000Z";
+    guest_name = "Rey Recruiter";
+    guest_email = "rey@acme.example";
+  }
+
+let field_of_body body name =
+  let parts = String.split_on_char '&' body in
+  let prefix = name ^ "=" in
+  List.fold_left
+    (fun acc part ->
+      match acc with
+      | Some _ -> acc
+      | None ->
+          if String.starts_with ~prefix part then
+            Some
+              (String.sub part (String.length prefix)
+                 (String.length part - String.length prefix))
+          else None)
+    None parts
+
+let cookie_csrf headers =
+  match Js.Dict.get headers "Cookie" with
+  | None -> None
+  | Some raw ->
+      let prefix = "__Host-calrs_csrf=" in
+      if String.starts_with ~prefix raw then
+        Some
+          (String.sub raw (String.length prefix)
+             (String.length raw - String.length prefix))
+      else None
+
+let prove_t19b_calrs_client () =
+  (* Happy path *)
+  let port, calls = calrs_port ~body:calrs_ok_body () in
+  port.create_tentative (hold_request hold_start) >>= fun created ->
+  (match created with
+  | Ok ev ->
+      E2e_ffi.assert_
+        (ev.Interview_calendar.event_id = "tok_abc123XY")
+        "T-19b cancel token is the event id";
+      E2e_ffi.assert_
+        (ev.Interview_calendar.html_link
+        = "https://cal.test.invalid/booking/ics/tok_abc123XY")
+        "T-19b html_link points at the calrs booking"
+  | Error e -> failwith ("T-19b expected Ok, got " ^ e));
+  E2e_ffi.assert_ (List.length !calls = 1) "T-19b one calrs POST";
+  let url, headers, sent = List.hd !calls in
+  E2e_ffi.assert_
+    (url = "https://cal.test.invalid/u/nate/interview-hold/book")
+    "T-19b posts to the calrs booking form";
+  E2e_ffi.assert_
+    (field_of_body sent "date" = Some "2026-09-01")
+    "T-19b sends the UTC date";
+  E2e_ffi.assert_
+    (field_of_body sent "time" = Some (Interview_token.encode_uri "17:00"))
+    "T-19b sends the UTC time";
+  E2e_ffi.assert_ (field_of_body sent "tz" = Some "UTC") "T-19b books in UTC";
+  E2e_ffi.assert_
+    (match (field_of_body sent "_csrf", cookie_csrf headers) with
+    | Some form, Some cookie -> form = cookie && form <> ""
+    | _ -> false)
+    "T-19b _csrf field matches the csrf cookie (double submit)";
+
+  (* Escaped and plain links both parse *)
+  E2e_ffi.assert_
+    (Interview_calrs.cancel_token_of_html calrs_ok_body = Some "tok_abc123XY")
+    "T-19b escaped /booking/ics/ link parses";
+  E2e_ffi.assert_
+    (Interview_calrs.cancel_token_of_html "/booking/ics/tok_abc123XY"
+    = Some "tok_abc123XY")
+    "T-19b plain /booking/ics/ link parses";
+
+  (* A pending booking has no cancel handle: fail loudly, never Ok *)
+  let pending_port, _ = calrs_port ~body:calrs_pending_body () in
+  pending_port.create_tentative (hold_request hold_start) >>= fun pending ->
+  (match pending with
+  | Error e ->
+      E2e_ffi.assert_
+        (String.starts_with ~prefix:"invalid:" e
+        && Js.String.includes ~search:"requires-confirmation" e)
+        "T-19b pending booking is a loud invalid"
+  | Ok _ -> failwith "T-19b pending must never be Ok");
+
+  (* Slot taken *)
+  let taken_port, _ = calrs_port ~body:calrs_taken_body () in
+  taken_port.create_tentative (hold_request hold_start) >>= fun taken ->
+  (match taken with
+  | Error e ->
+      E2e_ffi.assert_
+        (String.starts_with ~prefix:"slot_unavailable:" e)
+        "T-19b taken slot is slot_unavailable"
+  | Ok _ -> failwith "T-19b taken slot must not be Ok");
+
+  (* Misconfigured event type *)
+  let missing_port, _ = calrs_port ~body:calrs_no_event_body () in
+  missing_port.create_tentative (hold_request hold_start) >>= fun no_event ->
+  (match no_event with
+  | Error e ->
+      E2e_ffi.assert_
+        (String.starts_with ~prefix:"invalid:" e)
+        "T-19b unknown event type is invalid"
+  | Ok _ -> failwith "T-19b unknown event type must not be Ok");
+
+  (* calrs answers 200 even when it refuses: an unreadable 200 is never Ok *)
+  let unknown_port, _ = calrs_port ~body:calrs_unknown_body () in
+  unknown_port.create_tentative (hold_request hold_start) >>= fun unknown ->
+  (match unknown with
+  | Error _ -> ()
+  | Ok _ -> failwith "T-19b unrecognised 200 must never be Ok");
+
+  (* A non-UTC start never reaches the wire *)
+  let tz_port, tz_calls = calrs_port ~body:calrs_ok_body () in
+  tz_port.create_tentative (hold_request "2026-09-01T17:00:00+02:00")
+  >>= fun offset ->
+  E2e_ffi.assert_
+    (offset = Error "invalid:start must be UTC ISO-8601 ending in Z")
+    "T-19b non-UTC start is invalid";
+  E2e_ffi.assert_ (!tz_calls = []) "T-19b non-UTC start posts nothing";
+
+  (* Cancel *)
+  let cancel_port, cancel_calls = calrs_port ~body:"" () in
+  cancel_port.delete_event ~calendar_id:"scull7.com" ~event_id:"tok_abc123XY"
+  >>= fun cancelled ->
+  E2e_ffi.assert_ (cancelled = Ok ()) "T-19b cancel succeeds on 2xx";
+  (match !cancel_calls with
+  | [ (url, _, _) ] ->
+      E2e_ffi.assert_
+        (url = "https://cal.test.invalid/booking/cancel/tok_abc123XY")
+        "T-19b cancel posts to the calrs cancel path"
+  | _ -> failwith "T-19b cancel made no call");
+  let fail_cancel, _ = calrs_port ~ok:false ~status:500 ~body:"boom" () in
+  fail_cancel.delete_event ~calendar_id:"scull7.com" ~event_id:"tok_abc123XY"
+  >>= fun bad_cancel ->
+  E2e_ffi.assert_ (bad_cancel <> Ok ()) "T-19b cancel failure is an error";
+
+  (* of_config is fail-closed and names the first missing var *)
+  let cfg_none =
+    Interview_config.of_source ~source:(source [ env "X" "y" ]) ()
+  in
+  (Interview_calrs.of_config cfg_none).create_tentative (hold_request hold_start)
+  >>= fun unset ->
+  E2e_ffi.assert_
+    (unset = Error "missing_env:INTERVIEW_CAL_API_URL")
+    "T-19b no booking env is missing_env:INTERVIEW_CAL_API_URL";
+  let cfg_url =
+    Interview_config.of_source
+      ~source:(source [ env "INTERVIEW_CAL_API_URL" "https://cal.test.invalid" ])
+      ()
+  in
+  E2e_ffi.assert_
+    (Interview_config.missing_calendar cfg_url = Some "INTERVIEW_CAL_USERNAME")
+    "T-19b url alone still needs INTERVIEW_CAL_USERNAME";
+  let cfg_user =
+    Interview_config.of_source
+      ~source:
+        (source
+           [
+             env "INTERVIEW_CAL_API_URL" "https://cal.test.invalid/";
+             env "INTERVIEW_CAL_USERNAME" "nate";
+           ])
+      ()
+  in
+  E2e_ffi.assert_
+    (Interview_config.missing_calendar cfg_user
+    = Some "INTERVIEW_CAL_EVENT_SLUG")
+    "T-19b url + username still needs INTERVIEW_CAL_EVENT_SLUG";
+  E2e_ffi.assert_
+    (cfg_user.cal_api_url = Some "https://cal.test.invalid")
+    "T-19b trailing slash is stripped from the base url";
+  E2e_ffi.pass
+    "T-19b calrs client: booking form, escaped cancel token, refusals, cancel, \
+     fail-closed config";
+  return ()
+
+(* T-19b: a calrs refusal must refuse the whole hold, with no side effects. *)
+let prove_t19b_slot_unavailable_no_touch () =
+  let tables = Interview_store.Memory.create () in
+  let store = Interview_store.Memory.bind tables in
+  ready_hold ~store ~email:"slot@acme.example" ()
+  >>= fun (deps, sent, created, hooks, _id, book) ->
+  let taken_port, _ = calrs_port ~body:calrs_taken_body () in
+  let deps_taken = { deps with Interview_service.calendar = taken_port } in
+  post_hold deps_taken ~book_token:book () >>= fun res ->
+  json_body res >>= fun (text, _) ->
+  E2e_ffi.assert_
+    (response_status res = 409)
+    "T-19b slot_unavailable is 409";
+  E2e_ffi.assert_
+    (error_name text = "slot_unavailable")
+    "T-19b error=slot_unavailable";
+  E2e_ffi.assert_
+    (Hashtbl.length tables.holds = 0)
+    "T-19b slot_unavailable persists no hold";
+  E2e_ffi.assert_
+    (nathan_hold_mail sent = [])
+    "T-19b slot_unavailable sends no hold mail";
+  E2e_ffi.assert_
+    (booking_count hooks = 0)
+    "T-19b slot_unavailable sends no booking.requested";
+  E2e_ffi.assert_ (!created = []) "T-19b slot_unavailable creates no event";
+  post_hold deps ~book_token:book () >>= fun retry ->
+  E2e_ffi.assert_
+    (response_status retry = 201)
+    "T-19b book token survives a slot_unavailable refusal";
+  E2e_ffi.pass
+    "T-19b slot_unavailable refuses with no calendar, mail, webhook, or cap \
+     spend";
+  return ()
+
 (* T-19 AC10 *)
 let prove_t19_missing_env_no_fake_hold () =
-  (* The port stays fail-closed even when the booking env is set: cal.rs is
-     not wired yet, so create_tentative must never fake a hold. *)
-  let wired = Interview_calendar.of_config (test_cfg []) in
-  wired.create_tentative
-    {
-      calendar_id = "scull7.com";
-      summary = "probe";
-      description = "probe";
-      start_iso = hold_start;
-      end_iso = hold_start;
-    }
-  >>= fun probe ->
-  E2e_ffi.assert_
-    (probe = Error "cal_api_not_wired")
-    "T-19 AC10 wired port is fail-closed (cal_api_not_wired)";
   let tables = Interview_store.Memory.create () in
   let store = Interview_store.Memory.bind tables in
   let cfg_cal =
@@ -2563,6 +2796,8 @@ let prove_t19_missing_env_no_fake_hold () =
              env "TURSO_AUTH_TOKEN" "test-turso-token";
              env "INTERVIEW_MAGIC_LINK_SECRET" "test-secret-interview-me";
              env "INTERVIEW_CAL_API_URL" "https://cal.test.invalid";
+             env "INTERVIEW_CAL_USERNAME" "nate";
+             env "INTERVIEW_CAL_EVENT_SLUG" "interview-hold";
            ])
       ()
   in
@@ -2803,6 +3038,8 @@ let run () =
   >>= (fun () -> prove_t19_booking_requested_only ())
   >>= (fun () -> prove_t19_missing_env_no_fake_hold ())
   >>= (fun () -> prove_t19_mail_fail_after_create ())
+  >>= (fun () -> prove_t19b_calrs_client ())
+  >>= (fun () -> prove_t19b_slot_unavailable_no_touch ())
   >>= (fun () -> prove_t19_contact_openapi_mcp ())
   >>= (fun () ->
          E2e_ffi.console_log "e2e/interview PASS";

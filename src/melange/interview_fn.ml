@@ -169,7 +169,7 @@ let deps_for request context =
              store = Interview_store.of_config cfg;
              corpus;
             mail = Interview_mail.of_config cfg;
-            calendar = Interview_calendar.of_config cfg;
+            calendar = Interview_calrs.of_config cfg;
             webhook = Interview_webhook.http ();
            })
 

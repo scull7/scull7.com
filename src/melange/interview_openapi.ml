@@ -42,6 +42,7 @@ let schema_error =
                   Interview_json.str "token_invalid";
                   Interview_json.str "required_incomplete";
                   Interview_json.str "hold_cap";
+                  Interview_json.str "slot_unavailable";
                   Interview_json.str "banned";
                 ] );
           ] );
@@ -462,7 +463,8 @@ let document ~site_url =
                                   [
                                     ( "description",
                                       Interview_json.str
-                                        "required_incomplete or hold_cap" );
+                                        "required_incomplete, hold_cap, or \
+                                         slot_unavailable" );
                                     ("content", json_content schema_error);
                                   ] );
                               ( "503",

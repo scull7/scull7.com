@@ -5,6 +5,7 @@
 type error =
   | Missing_env of string
   | Invalid of string
+  | Slot_unavailable of string
   | Free_email of string
   | Banned of string
   | Not_found
@@ -490,13 +491,30 @@ let fire_booking deps (session : Interview_store.session) ~hold_id ~start
       >>= (function Ok () | Error _ -> return ())
       |> Js.Promise.catch (fun _ -> return ())
 
+let strip_prefix ~prefix s =
+  if String.starts_with ~prefix s then
+    Some
+      (String.sub s (String.length prefix) (String.length s - String.length prefix))
+  else None
+
+(* Port errors arrive as "<tag>:<detail>" so a backend can name a refusal
+   without the service knowing which backend spoke. *)
 let env_error msg =
-  let prefix = "missing_env:" in
-  if String.starts_with ~prefix msg then
-    Missing_env
-      (String.sub msg (String.length prefix)
-         (String.length msg - String.length prefix))
-  else Invalid msg
+  let tagged =
+    [
+      ("missing_env:", fun detail -> Missing_env detail);
+      ("slot_unavailable:", fun detail -> Slot_unavailable detail);
+      ("invalid:", fun detail -> Invalid detail);
+    ]
+  in
+  let rec first = function
+    | [] -> if msg = "slot_unavailable" then Slot_unavailable "" else Invalid msg
+    | (prefix, make) :: rest -> (
+        match strip_prefix ~prefix msg with
+        | Some detail -> make detail
+        | None -> first rest)
+  in
+  first tagged
 
 let create_hold (deps : deps) ~start ~end_ ~book_token =
   match Interview_config.missing_store deps.cfg with
@@ -551,6 +569,8 @@ let create_hold (deps : deps) ~start ~end_ ~book_token =
                              ^ session.work_email ^ ">";
                            start_iso;
                            end_iso;
+                           guest_name = session.recruiter_name;
+                           guest_email = session.work_email;
                          }
                        in
                        deps.calendar.create_tentative req >>= function
@@ -698,6 +718,7 @@ let search_experience (deps : deps) query =
 let error_code = function
   | Missing_env _ -> 503
   | Invalid _ -> 400
+  | Slot_unavailable _ -> 409
   | Free_email _ -> 400
   | Banned _ -> 403
   | Not_found -> 404
@@ -708,6 +729,7 @@ let error_code = function
 let error_name = function
   | Missing_env _ -> "missing_env"
   | Invalid _ -> "invalid"
+  | Slot_unavailable _ -> "slot_unavailable"
   | Free_email _ -> "free_email"
   | Banned _ -> "banned"
   | Not_found -> "not_found"
@@ -726,6 +748,12 @@ let error_json = function
       Interview_json.obj
         [
           ("error", Interview_json.str "invalid");
+          ("message", Interview_json.str msg);
+        ]
+  | Slot_unavailable msg ->
+      Interview_json.obj
+        [
+          ("error", Interview_json.str "slot_unavailable");
           ("message", Interview_json.str msg);
         ]
   | Free_email domain ->
