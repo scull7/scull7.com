@@ -22,6 +22,7 @@
   interview_config
   interview_mail
   interview_calendar
+  interview_calrs
   interview_store
   interview_webhook
   interview_service

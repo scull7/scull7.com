@@ -1,6 +1,6 @@
-(* Isolated booking-backend (calendar) port. create_tentative and
-   delete_event are the only side effects. Tests inject capture() so no live
-   backend is used. *)
+(* Isolated booking-backend port. create_tentative and delete_event are the
+   only side effects. This module knows nothing about which backend is used;
+   Interview_calrs builds the production one and tests inject capture(). *)
 
 type request = {
   calendar_id : string;
@@ -8,6 +8,8 @@ type request = {
   description : string;
   start_iso : string;
   end_iso : string;
+  guest_name : string;
+  guest_email : string;
 }
 
 type created = {
@@ -26,13 +28,11 @@ type t = {
     (unit, string) result Js.Promise.t;
 }
 
-let ( >>= ) p f = Js.Promise.then_ f p
 let return x = Js.Promise.resolve x
 
 let unused () =
   {
-    create_tentative =
-      (fun _ -> return (Error "create_hold is not available"));
+    create_tentative = (fun _ -> return (Error "create_hold is not available"));
     delete_event = (fun ~calendar_id:_ ~event_id:_ -> return (Ok ()));
   }
 
@@ -60,21 +60,3 @@ let capture () =
           return (Ok ()));
     },
     created )
-
-let of_config (cfg : Interview_config.t) =
-  match cfg.cal_api_url with
-  | None ->
-      {
-        create_tentative =
-          (fun _ -> return (Error "missing_env:INTERVIEW_CAL_API_URL"));
-        delete_event = (fun ~calendar_id:_ ~event_id:_ -> return (Ok ()));
-      }
-  | Some _ ->
-      (* cal.rs (Rust service on Vultr) API does not exist yet; wiring it is a
-         later card. Until then the port stays fail-closed: no fetch, no
-         localhost, no Ok created. *)
-      {
-        create_tentative =
-          (fun _ -> return (Error "cal_api_not_wired"));
-        delete_event = (fun ~calendar_id:_ ~event_id:_ -> return (Ok ()));
-      }

@@ -20,7 +20,8 @@ type t = {
   hold_cap : int;
   hold_default_seconds : int;
   cal_api_url : string option;
-  cal_api_token : string option;
+  cal_username : string option;
+  cal_event_slug : string option;
 }
 
 type source = string -> string option
@@ -130,12 +131,15 @@ let of_source ?(source = process_source) () =
       Interview_hold.parse_seconds (source "INTERVIEW_HOLD_DEFAULT_SECONDS");
     cal_api_url =
       (match source "INTERVIEW_CAL_API_URL" with
-      | Some v -> Some (String.trim v)
+      | Some v ->
+          let s = String.trim v in
+          Some
+            (if String.ends_with ~suffix:"/" s then
+               String.sub s 0 (String.length s - 1)
+             else s)
       | None -> None);
-    cal_api_token =
-      (match source "INTERVIEW_CAL_API_TOKEN" with
-      | Some v -> Some (sanitize_secret v)
-      | None -> None);
+    cal_username = source "INTERVIEW_CAL_USERNAME";
+    cal_event_slug = source "INTERVIEW_CAL_EVENT_SLUG";
   }
 
 let load () = of_source ()
@@ -157,9 +161,10 @@ let missing_mail cfg =
   | None -> Some "RESEND_API_KEY"
 
 let missing_calendar cfg =
-  match cfg.cal_api_url with
-  | Some _ -> None
-  | None -> Some "INTERVIEW_CAL_API_URL"
+  if cfg.cal_api_url = None then Some "INTERVIEW_CAL_API_URL"
+  else if cfg.cal_username = None then Some "INTERVIEW_CAL_USERNAME"
+  else if cfg.cal_event_slug = None then Some "INTERVIEW_CAL_EVENT_SLUG"
+  else None
 
 let required_ids cfg = Interview_required.parse cfg.required_questions_raw
 
