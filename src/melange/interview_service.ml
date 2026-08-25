@@ -1,6 +1,6 @@
 (* Named session + cited ask + required-set progress + human magic-link
    verify + book-token create_hold. Cap/ban/refuse are calculations;
-   GCal, Resend HTTP, and webhook POST are isolated actions. *)
+   calendar port, Resend HTTP, and webhook POST are isolated actions. *)
 
 type error =
   | Missing_env of string

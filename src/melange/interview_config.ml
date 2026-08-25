@@ -19,12 +19,8 @@ type t = {
   calendar_id : string;
   hold_cap : int;
   hold_default_seconds : int;
-  google_oauth_client_id : string option;
-  google_oauth_client_secret : string option;
-  google_oauth_refresh_token : string option;
-  google_service_account_json : string option;
-  google_client_email : string option;
-  google_private_key : string option;
+  cal_api_url : string option;
+  cal_api_token : string option;
 }
 
 type source = string -> string option
@@ -132,21 +128,14 @@ let of_source ?(source = process_source) () =
     hold_cap = Interview_hold.parse_cap (source "INTERVIEW_HOLD_CAP");
     hold_default_seconds =
       Interview_hold.parse_seconds (source "INTERVIEW_HOLD_DEFAULT_SECONDS");
-    google_oauth_client_id =
-      (match source "GOOGLE_OAUTH_CLIENT_ID" with
-      | Some v -> Some v
-      | None -> source "GOOGLE_CLIENT_ID");
-    google_oauth_client_secret =
-      (match source "GOOGLE_OAUTH_CLIENT_SECRET" with
-      | Some v -> Some v
-      | None -> source "GOOGLE_CLIENT_SECRET");
-    google_oauth_refresh_token =
-      (match source "GOOGLE_OAUTH_REFRESH_TOKEN" with
-      | Some v -> Some v
-      | None -> source "GOOGLE_REFRESH_TOKEN");
-    google_service_account_json = source "GOOGLE_SERVICE_ACCOUNT_JSON";
-    google_client_email = source "GOOGLE_CLIENT_EMAIL";
-    google_private_key = source "GOOGLE_PRIVATE_KEY";
+    cal_api_url =
+      (match source "INTERVIEW_CAL_API_URL" with
+      | Some v -> Some (String.trim v)
+      | None -> None);
+    cal_api_token =
+      (match source "INTERVIEW_CAL_API_TOKEN" with
+      | Some v -> Some (sanitize_secret v)
+      | None -> None);
   }
 
 let load () = of_source ()
@@ -167,26 +156,10 @@ let missing_mail cfg =
   | Some _ -> None
   | None -> Some "RESEND_API_KEY"
 
-let has_google_oauth cfg =
-  match
-    ( cfg.google_oauth_client_id,
-      cfg.google_oauth_client_secret,
-      cfg.google_oauth_refresh_token )
-  with
-  | Some _, Some _, Some _ -> true
-  | _ -> false
-
-let has_google_service_account cfg =
-  match cfg.google_service_account_json with
-  | Some _ -> true
-  | None -> (
-      match (cfg.google_client_email, cfg.google_private_key) with
-      | Some _, Some _ -> true
-      | _ -> false)
-
 let missing_calendar cfg =
-  if has_google_oauth cfg || has_google_service_account cfg then None
-  else Some "GOOGLE_OAUTH_REFRESH_TOKEN"
+  match cfg.cal_api_url with
+  | Some _ -> None
+  | None -> Some "INTERVIEW_CAL_API_URL"
 
 let required_ids cfg = Interview_required.parse cfg.required_questions_raw
 
