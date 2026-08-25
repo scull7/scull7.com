@@ -1,4 +1,4 @@
-(* Hold-cap and default-end calculations. Isolated from GCal, mail, and
+(* Hold-cap and default-end calculations. Isolated from the calendar port, mail, and
    webhook actions — those stay in their modules. *)
 
 let default_cap = 3

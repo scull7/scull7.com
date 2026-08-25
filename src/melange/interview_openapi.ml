@@ -423,7 +423,7 @@ let document ~site_url =
                         ("operationId", Interview_json.str "createHold");
                         ( "summary",
                           Interview_json.str
-                            "Create a tentative Google Calendar hold. \
+                            "Create a tentative calendar hold. \
                              Book-token only: start + book_token, optional \
                              end. No session path param." );
                         ( "requestBody",

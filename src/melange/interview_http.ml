@@ -137,7 +137,7 @@ let mcp_tools =
       [ "session_id" ],
       [] );
     ( "create_hold",
-      "Create a tentative Google Calendar hold. Body is start + book_token \
+      "Create a tentative calendar hold. Body is start + book_token \
        (optional end). Requires a completed required set and a work domain \
        under the active-hold cap. Default hold length is 1 hour.",
       [ "start"; "book_token" ],

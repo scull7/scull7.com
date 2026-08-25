@@ -7,7 +7,7 @@
 
 ## Job
 
-Interview-me is a **real product** that lets **recruiter agents interview Nathan Sculli**. Agents ask questions against published career facts and, after the recruiter verifies a work email, can request a booking that creates a **tentative Google Calendar hold**.
+Interview-me is a **real product** that lets **recruiter agents interview Nathan Sculli**. Agents ask questions against published career facts and, after the recruiter verifies a work email, can request a booking that creates a **tentative calendar hold**.
 
 The first user is recruiter agents interviewing Nathan Sculli — not Nathan practicing.
 
@@ -21,7 +21,7 @@ Contact already public: `nathan@vegasbuckeye.com`. Site: https://scull7.com. Do 
 |-------|------------|
 | Recruiter agent | Starts a named session, asks questions, may request verification and a booking |
 | Recruiter (human) | Receives a magic link, clicks once; the agent never needs inbox access |
-| Nathan | Calendar owner; the Google Calendar connector already exists |
+| Nathan | Calendar owner; bookings are CRUD'd by the cal.rs booking service |
 
 ## v1 loop
 
@@ -31,7 +31,7 @@ v1 includes **named sessions** and a **booking request**.
 2. The agent **asks questions**. Answers are cited from published facts (`public/resume.json` and public site pages). Refuse anything not in that corpus. No invented career facts.
 3. Q&A can stay open **without** verification.
 4. To book, the agent **requests a verification email**. Email verify is a human step: the recruiter receives a magic link, clicks once, the agent receives a short-lived book token. The agent never needs inbox access.
-5. With that book token, the agent **creates a hold** (start/end) only if the session has **completed the required question set** and the work domain is **under the active-hold cap**. A booking request creates a **tentative Google Calendar hold**.
+5. With that book token, the agent **creates a hold** (start/end) only if the session has **completed the required question set** and the work domain is **under the active-hold cap**. A booking request creates a **tentative calendar hold**.
 6. A work email must be verified **before any calendar hold**.
 
 ## Auth
@@ -58,13 +58,15 @@ When a hold is created, Nathan receives a hold notification email with an easy o
 
 ## Calendar holds
 
-A booking request creates a **tentative Google Calendar hold**. The Calendar connector already exists for Nathan.
+A booking request creates a **tentative calendar hold**.
+
+**Backend, 2026-08-24:** bookings are CRUD'd by **cal.rs**, a separate Rust service — not Google Calendar. scull7.com keeps an isolated calendar port; the cal.rs API does not exist yet, so production stays fail-closed (`missing_env:INTERVIEW_CAL_API_URL`) until it is wired.
 
 Required before a hold: verified work email, a short-lived book token for that session, a completed required question set (a refusal does not count), and a work domain under the active-hold cap.
 
-Create-hold inputs: start, end, book token. Result: a tentative GCal event. Default hold length is **1 hour**.
+Create-hold inputs: start, end, book token. Result: a tentative calendar event. Default hold length is **1 hour**.
 
-Holds go to the **default scull7.com Google Calendar**. Which calendar is used **must** be configurable — do not hard-code it forever.
+Holds go to the **default scull7.com calendar**. Which calendar is used **must** be configurable — do not hard-code it forever.
 
 Creating a hold also sends Nathan the hold notification email described under Auth.
 
@@ -106,7 +108,7 @@ Documented behavior, not an implementation. Do **not** add surfaces beyond this 
 | Ask question | Cited answer from the corpus, or a refusal if the fact is not published. |
 | Request verification email | Sends the magic link to the session’s work email. |
 | Verify magic link | Human click. Issues a short-lived book token scoped to that session. |
-| Create hold | start/end + book token → tentative GCal event. No hold without a valid token, a completed required set, and a work domain under the cap. |
+| Create hold | start/end + book token → tentative calendar event. No hold without a valid token, a completed required set, and a work domain under the cap. |
 | Get resume | Published resume facts from the same corpus. |
 | Search experience | Search published experience facts from the same corpus. |
 

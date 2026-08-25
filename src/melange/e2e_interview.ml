@@ -70,9 +70,7 @@ let test_cfg extras =
              env "INTERVIEW_MAGIC_LINK_SECRET" "test-secret-interview-me";
              env "RESEND_API_KEY" "re_test_not_a_secret";
              env "INTERVIEW_MAIL_FROM" "nathan@vegasbuckeye.com";
-             env "GOOGLE_OAUTH_CLIENT_ID" "test-gcal-client";
-             env "GOOGLE_OAUTH_CLIENT_SECRET" "test-gcal-secret";
-             env "GOOGLE_OAUTH_REFRESH_TOKEN" "test-gcal-refresh";
+             env "INTERVIEW_CAL_API_URL" "https://cal.test.invalid";
            ]))
     ()
 
@@ -1984,7 +1982,8 @@ let prove_t18_no_hold_or_verify () =
     "T-18 AC9 create_hold creates no calendar event";
   E2e_ffi.assert_ (!created = []) "T-18 AC9 create_hold never called calendar";
   assert_no_booking hooks "T-18 AC9";
-  E2e_ffi.pass "T-18 AC9 no create_hold, verify, book token, GCal, or hold mail";
+  E2e_ffi.pass
+    "T-18 AC9 no create_hold, verify, book token, calendar port, or hold mail";
   return ()
 
 let hold_start = "2026-09-01T17:00:00.000Z"
@@ -2038,7 +2037,7 @@ let completed_count hooks =
        (webhook_event_names hooks))
 
 let assert_no_touch ~sent ~created ~hooks ~holds label =
-  E2e_ffi.assert_ (!created = []) (label ^ " no GCal event");
+  E2e_ffi.assert_ (!created = []) (label ^ " no calendar event");
   E2e_ffi.assert_
     (nathan_hold_mail sent = [])
     (label ^ " no Nathan hold mail");
@@ -2267,13 +2266,15 @@ let prove_t19_create_hold_and_mcp () =
       E2e_ffi.assert_
         (Interview_json.string_field dict "status" = "tentative")
         "T-19 AC5 tentative");
-  E2e_ffi.assert_ (List.length !created = 1) "T-19 AC5 one GCal event";
+  E2e_ffi.assert_ (List.length !created = 1) "T-19 AC5 one calendar event";
   let ev = List.hd !created in
-  E2e_ffi.assert_ (ev.calendar_id = "scull7.com") "T-19 AC5 GCal calendar_id";
-  E2e_ffi.assert_ (ev.start_iso = hold_start) "T-19 AC5 GCal start";
+  E2e_ffi.assert_
+    (ev.calendar_id = "scull7.com")
+    "T-19 AC5 calendar calendar_id";
+  E2e_ffi.assert_ (ev.start_iso = hold_start) "T-19 AC5 calendar start";
   E2e_ffi.assert_
     (ev.end_iso = "2026-09-01T18:00:00.000Z")
-    "T-19 AC5 GCal default 1 hour";
+    "T-19 AC5 calendar default 1 hour";
   E2e_ffi.assert_
     (List.length (nathan_hold_mail sent) = 1)
     "T-19 AC5 Nathan hold mail sent";
@@ -2306,7 +2307,7 @@ let prove_t19_create_hold_and_mcp () =
   E2e_ffi.assert_ (List.length !created2 = 1) "T-19 AC5 MCP created one event";
   E2e_ffi.assert_
     ((List.hd !created2).end_iso = hold_end_explicit)
-    "T-19 AC5 MCP GCal uses passed end";
+    "T-19 AC5 MCP calendar uses passed end";
   ignore hooks;
   E2e_ffi.pass
     "T-19 AC5 create_hold makes a 1-hour tentative event; MCP matches HTTP";
@@ -2339,10 +2340,10 @@ let prove_t19_calendar_and_length_configurable () =
         "T-19 AC6 default length 7200s");
   E2e_ffi.assert_
     ((List.hd !created).calendar_id = "other.example")
-    "T-19 AC6 GCal uses INTERVIEW_CALENDAR_ID";
+    "T-19 AC6 calendar uses INTERVIEW_CALENDAR_ID";
   E2e_ffi.assert_
     ((List.hd !created).end_iso = "2026-09-01T19:00:00.000Z")
-    "T-19 AC6 GCal uses INTERVIEW_HOLD_DEFAULT_SECONDS";
+    "T-19 AC6 calendar uses INTERVIEW_HOLD_DEFAULT_SECONDS";
   E2e_ffi.pass
     "T-19 AC6 calendar id and default length change without a code change";
   return ()
@@ -2494,9 +2495,24 @@ let prove_t19_booking_requested_only () =
 
 (* T-19 AC10 *)
 let prove_t19_missing_env_no_fake_hold () =
+  (* The port stays fail-closed even when the booking env is set: cal.rs is
+     not wired yet, so create_tentative must never fake a hold. *)
+  let wired = Interview_calendar.of_config (test_cfg []) in
+  wired.create_tentative
+    {
+      calendar_id = "scull7.com";
+      summary = "probe";
+      description = "probe";
+      start_iso = hold_start;
+      end_iso = hold_start;
+    }
+  >>= fun probe ->
+  E2e_ffi.assert_
+    (probe = Error "cal_api_not_wired")
+    "T-19 AC10 wired port is fail-closed (cal_api_not_wired)";
   let tables = Interview_store.Memory.create () in
   let store = Interview_store.Memory.bind tables in
-  let cfg_gcal =
+  let cfg_cal =
     Interview_config.of_source
       ~source:
         (source
@@ -2508,27 +2524,34 @@ let prove_t19_missing_env_no_fake_hold () =
            ])
       ()
   in
-  (match Interview_config.missing_calendar cfg_gcal with
-  | Some "GOOGLE_OAUTH_REFRESH_TOKEN" -> ()
-  | Some name -> failwith ("T-19 AC10 expected GCal name, got " ^ name)
-  | None -> failwith "T-19 AC10 missing GCal must not satisfy");
-  ready_hold ~cfg:cfg_gcal ~store ~email:"gcal@acme.example" ()
+  (match Interview_config.missing_calendar cfg_cal with
+  | Some "INTERVIEW_CAL_API_URL" -> ()
+  | Some name -> failwith ("T-19 AC10 expected calendar name, got " ^ name)
+  | None -> failwith "T-19 AC10 missing calendar env must not satisfy");
+  ready_hold ~cfg:cfg_cal ~store ~email:"cal@acme.example" ()
   >>= fun (deps, sent, created, hooks, _id, book) ->
-  post_hold deps ~book_token:book () >>= fun res_gcal ->
-  json_body res_gcal >>= fun (text_gcal, _) ->
+  post_hold deps ~book_token:book () >>= fun res_cal ->
+  json_body res_cal >>= fun (text_cal, _) ->
   E2e_ffi.assert_
-    (error_name text_gcal = "missing_env")
-    "T-19 AC10 missing GCal is missing_env";
-  E2e_ffi.assert_ (!created = []) "T-19 AC10 missing GCal creates no event";
+    (error_name text_cal = "missing_env")
+    "T-19 AC10 missing calendar is missing_env";
+  E2e_ffi.assert_ (!created = []) "T-19 AC10 missing calendar creates no event";
   E2e_ffi.assert_
     (Hashtbl.length tables.holds = 0)
-    "T-19 AC10 missing GCal persists no hold";
+    "T-19 AC10 missing calendar persists no hold";
   E2e_ffi.assert_
     (nathan_hold_mail sent = [])
-    "T-19 AC10 missing GCal sends no hold mail";
+    "T-19 AC10 missing calendar sends no hold mail";
   E2e_ffi.assert_
     (booking_count hooks = 0)
-    "T-19 AC10 missing GCal sends no booking.requested";
+    "T-19 AC10 missing calendar sends no booking.requested";
+  post_hold
+    { deps with Interview_service.cfg = test_cfg [] }
+    ~book_token:book ()
+  >>= fun retry_res ->
+  E2e_ffi.assert_
+    (response_status retry_res = 201)
+    "T-19 AC10 book token not consumed by missing_env; still usable";
   let tables2 = Interview_store.Memory.create () in
   let store2 = Interview_store.Memory.bind tables2 in
   let cfg_mail =
@@ -2539,9 +2562,7 @@ let prove_t19_missing_env_no_fake_hold () =
              env "TURSO_DATABASE_URL" "https://interview-me.test.invalid";
              env "TURSO_AUTH_TOKEN" "test-turso-token";
              env "INTERVIEW_MAGIC_LINK_SECRET" "test-secret-interview-me";
-             env "GOOGLE_OAUTH_CLIENT_ID" "test-gcal-client";
-             env "GOOGLE_OAUTH_CLIENT_SECRET" "test-gcal-secret";
-             env "GOOGLE_OAUTH_REFRESH_TOKEN" "test-gcal-refresh";
+             env "INTERVIEW_CAL_API_URL" "https://cal.test.invalid";
            ])
       ()
   in
@@ -2567,11 +2588,13 @@ let prove_t19_missing_env_no_fake_hold () =
   E2e_ffi.assert_
     (booking_count hooks2 = 0)
     "T-19 AC10 missing mail sends no booking.requested";
-  E2e_ffi.pass "T-19 AC10 missing GCal or mail sender is missing_env; no fake hold";
+  E2e_ffi.pass
+    "T-19 AC10 missing calendar or mail sender is missing_env; no fake hold; \
+     token reusable; port fail-closed";
   return ()
 
 (* T-19 AC11 *)
-let prove_t19_mail_fail_after_gcal () =
+let prove_t19_mail_fail_after_create () =
   let tables = Interview_store.Memory.create () in
   let store = Interview_store.Memory.bind tables in
   let cfg = test_cfg [ env "INTERVIEW_HOLD_CAP" "1" ] in
@@ -2590,13 +2613,13 @@ let prove_t19_mail_fail_after_gcal () =
   json_body fail_res >>= fun (fail_text, _) ->
   E2e_ffi.assert_
     (error_name fail_text <> "")
-    "T-19 AC11 mail-fail-after-GCal is an error";
+    "T-19 AC11 mail-fail-after-create is an error";
   E2e_ffi.assert_
     (not
        (Js.String.includes ~search:"hold_id" fail_text
        && error_name fail_text = ""))
     "T-19 AC11 mail-fail is not a successful hold";
-  E2e_ffi.assert_ (!created = []) "T-19 AC11 GCal cancelled after mail fail";
+  E2e_ffi.assert_ (!created = []) "T-19 AC11 calendar cancelled after mail fail";
   E2e_ffi.assert_
     (Hashtbl.length tables.holds = 0)
     "T-19 AC11 hold-cap not consumed";
@@ -2625,7 +2648,7 @@ let prove_t19_mail_fail_after_gcal () =
     (Hashtbl.length tables.holds = 1)
     "T-19 AC11 later success consumes the first cap slot";
   E2e_ffi.pass
-    "T-19 AC11 mail-fail-after-GCal cancels event; token reusable; cap free";
+    "T-19 AC11 mail-fail-after-create cancels event; token reusable; cap free";
   return ()
 
 (* T-19 AC12 *)
@@ -2779,7 +2802,7 @@ let run () =
   >>= (fun () -> prove_t19_nathan_mail_and_ban ())
   >>= (fun () -> prove_t19_booking_requested_only ())
   >>= (fun () -> prove_t19_missing_env_no_fake_hold ())
-  >>= (fun () -> prove_t19_mail_fail_after_gcal ())
+  >>= (fun () -> prove_t19_mail_fail_after_create ())
   >>= (fun () -> prove_t19_contact_openapi_mcp ())
   >>= (fun () ->
          E2e_ffi.console_log "e2e/interview PASS";
