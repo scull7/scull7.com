@@ -45,8 +45,16 @@ type t = {
   put_token : token -> unit Js.Promise.t;
   get_token : string -> token option Js.Promise.t;
   consume_token : string -> unit Js.Promise.t;
+  (* Claim wins exactly once across concurrent callers; release undoes a
+     claim whose work was refused. *)
+  claim_token : string -> bool Js.Promise.t;
+  release_token : string -> unit Js.Promise.t;
   put_hold : hold -> unit Js.Promise.t;
   count_active_holds : string -> string -> int Js.Promise.t;
+  (* The rows behind that count, so the cap can drop holds whose booking is
+     gone from the backend. *)
+  active_holds : string -> string -> hold list Js.Promise.t;
+  cancel_hold : string -> unit Js.Promise.t;
   put_ban : ban -> unit Js.Promise.t;
   is_banned : string -> string -> bool Js.Promise.t;
 }
@@ -138,6 +146,19 @@ module Memory = struct
              Hashtbl.replace tables.tokens id { tok with consumed = true }
            with Not_found -> ());
           return ());
+      claim_token =
+        (fun id ->
+          match Hashtbl.find_opt tables.tokens id with
+          | Some tok when not tok.consumed ->
+              Hashtbl.replace tables.tokens id { tok with consumed = true };
+              return true
+          | _ -> return false);
+      release_token =
+        (fun id ->
+          (match Hashtbl.find_opt tables.tokens id with
+          | Some tok -> Hashtbl.replace tables.tokens id { tok with consumed = false }
+          | None -> ());
+          return ());
       put_hold =
         (fun h ->
           Hashtbl.replace tables.holds h.id h;
@@ -153,6 +174,24 @@ module Memory = struct
               then incr n)
             tables.holds;
           return !n);
+      active_holds =
+        (fun domain now_iso ->
+          let acc = ref [] in
+          Hashtbl.iter
+            (fun _ h ->
+              if
+                Interview_hold.is_active ~status:h.status ~end_at:h.end_at
+                  ~now_iso
+                && h.work_domain = domain
+              then acc := h :: !acc)
+            tables.holds;
+          return !acc);
+      cancel_hold =
+        (fun id ->
+          (match Hashtbl.find_opt tables.holds id with
+          | Some h -> Hashtbl.replace tables.holds id { h with status = "cancelled" }
+          | None -> ());
+          return ());
       put_ban =
         (fun b ->
           Hashtbl.replace tables.bans (b.kind ^ ":" ^ b.value) b;
@@ -354,6 +393,33 @@ let token_of_row = function
         created_at = "";
       }
 
+let hold_of_row = function
+  | id :: session_id :: work_domain :: start_at :: end_at :: status
+    :: calendar_id :: calendar_event_id :: created_at :: _ ->
+      {
+        id;
+        session_id;
+        work_domain;
+        start_at;
+        end_at;
+        status;
+        calendar_id;
+        calendar_event_id;
+        created_at;
+      }
+  | _ ->
+      {
+        id = "";
+        session_id = "";
+        work_domain = "";
+        start_at = "";
+        end_at = "";
+        status = "";
+        calendar_id = "";
+        calendar_event_id = "";
+        created_at = "";
+      }
+
 let clip_body body =
   let t = String.trim body in
   if String.length t <= 300 then t else String.sub t 0 297 ^ "..."
@@ -531,6 +597,28 @@ let turso ~url ~token () : t =
               [ arg_text id ];
           ]
         >>= fun _ -> return ());
+    claim_token =
+      (fun id ->
+        ensure () >>= fun () ->
+        post
+          [
+            exec_stmt
+              {|UPDATE interview_tokens SET consumed = 1
+                 WHERE token = ? AND consumed = 0
+                 RETURNING token|}
+              [ arg_text id ];
+          ]
+        >>= fun json -> return (rows_of_result json <> []));
+    release_token =
+      (fun id ->
+        ensure () >>= fun () ->
+        post
+          [
+            exec_stmt
+              "UPDATE interview_tokens SET consumed = 0 WHERE token = ?"
+              [ arg_text id ];
+          ]
+        >>= fun _ -> return ());
     put_hold =
       (fun h ->
         ensure () >>= fun () ->
@@ -569,6 +657,29 @@ let turso ~url ~token () : t =
         match rows_of_result json with
         | (n :: _) :: _ -> return (try int_of_string n with _ -> 0)
         | _ -> return 0);
+    active_holds =
+      (fun domain now_iso ->
+        ensure () >>= fun () ->
+        post
+          [
+            exec_stmt
+              {|SELECT id, session_id, work_domain, start_at, end_at, status,
+                       calendar_id, calendar_event_id, created_at
+                  FROM interview_holds
+                 WHERE work_domain = ? AND status = 'tentative' AND end_at > ?|}
+              [ arg_text domain; arg_text now_iso ];
+          ]
+        >>= fun json -> return (List.map hold_of_row (rows_of_result json)));
+    cancel_hold =
+      (fun id ->
+        ensure () >>= fun () ->
+        post
+          [
+            exec_stmt
+              "UPDATE interview_holds SET status = 'cancelled' WHERE id = ?"
+              [ arg_text id ];
+          ]
+        >>= fun _ -> return ());
     put_ban =
       (fun b ->
         ensure () >>= fun () ->
@@ -607,7 +718,11 @@ let unavailable name : t =
     get_token = (fun _ -> fail ());
     consume_token = (fun _ -> fail ());
     put_hold = (fun _ -> fail ());
+    claim_token = (fun _ -> fail ());
+    release_token = (fun _ -> fail ());
     count_active_holds = (fun _ _ -> fail ());
+    active_holds = (fun _ _ -> fail ());
+    cancel_hold = (fun _ -> fail ());
     put_ban = (fun _ -> fail ());
     is_banned = (fun _ _ -> fail ());
   }

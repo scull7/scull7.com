@@ -20,6 +20,9 @@ type http_post =
   body:string ->
   Interview_http_fetch.response Js.Promise.t
 
+type http_get =
+  string -> headers:string Js.Dict.t -> Interview_http_fetch.response Js.Promise.t
+
 let ( >>= ) p f = Js.Promise.then_ f p
 let return x = Js.Promise.resolve x
 
@@ -109,6 +112,7 @@ let classify_failure body =
 
 let book_path ~username ~slug = "/u/" ^ username ^ "/" ^ slug ^ "/book"
 let cancel_path ~event_id = "/booking/cancel/" ^ event_id
+let ics_path ~event_id = "/booking/ics/" ^ event_id
 
 let book_body ~csrf ~date ~time (req : Interview_calendar.request) =
   form_encode
@@ -134,8 +138,8 @@ let csrf_headers csrf =
   Js.Dict.set headers "Cookie" ("__Host-calrs_csrf=" ^ csrf);
   headers
 
-let port ?(post = Interview_http_fetch.post) ~base ~username ~slug () :
-    Interview_calendar.t =
+let port ?(post = Interview_http_fetch.post) ?(get = Interview_http_fetch.get)
+    ~base ~username ~slug () : Interview_calendar.t =
   {
     create_tentative =
       (fun (req : Interview_calendar.request) ->
@@ -164,6 +168,18 @@ let port ?(post = Interview_http_fetch.post) ~base ~username ~slug () :
                       end_iso = req.end_iso;
                     }
               | _ -> Error (classify_failure text)));
+    (* calrs serves the booking's ics while it is live and 404s once it is
+       cancelled, so that is the cheapest existence probe it offers. *)
+    event_exists =
+      (fun ~calendar_id:_ ~event_id ->
+        get (base ^ ics_path ~event_id) ~headers:(Js.Dict.empty ())
+        >>= fun resp ->
+        let status = Interview_http_fetch.response_status resp in
+        if Interview_http_fetch.response_ok resp then return (Ok true)
+        else if status = 404 then return (Ok false)
+        else
+          return
+            (Error ("calrs ics probe returned " ^ string_of_int status)));
     delete_event =
       (fun ~calendar_id:_ ~event_id ->
         let csrf = Interview_clock.random_id () in
@@ -177,7 +193,7 @@ let port ?(post = Interview_http_fetch.post) ~base ~username ~slug () :
 
 (* Composition root for the calendar port: the real backend when every
    booking env is present, fail-closed missing_env otherwise. *)
-let of_config ?post (cfg : Interview_config.t) : Interview_calendar.t =
+let of_config ?post ?get (cfg : Interview_config.t) : Interview_calendar.t =
   match
     (Interview_config.missing_calendar cfg, cfg.cal_api_url, cfg.cal_username,
      cfg.cal_event_slug)
@@ -186,12 +202,14 @@ let of_config ?post (cfg : Interview_config.t) : Interview_calendar.t =
       {
         create_tentative = (fun _ -> return (Error ("missing_env:" ^ name)));
         delete_event = (fun ~calendar_id:_ ~event_id:_ -> return (Ok ()));
+        event_exists = (fun ~calendar_id:_ ~event_id:_ -> return (Ok true));
       }
   | None, Some base, Some username, Some slug ->
-      port ?post ~base ~username ~slug ()
+      port ?post ?get ~base ~username ~slug ()
   | None, _, _, _ ->
       {
         create_tentative =
           (fun _ -> return (Error "missing_env:INTERVIEW_CAL_API_URL"));
         delete_event = (fun ~calendar_id:_ ~event_id:_ -> return (Ok ()));
+        event_exists = (fun ~calendar_id:_ ~event_id:_ -> return (Ok true));
       }

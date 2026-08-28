@@ -26,6 +26,12 @@ type t = {
     calendar_id:string ->
     event_id:string ->
     (unit, string) result Js.Promise.t;
+  (* Does the booking still exist on the backend? A hold cancelled there
+     never reaches us, so the cap has to ask. Error means "unknown", and
+     callers must treat unknown as still-live rather than free a slot on a
+     flaky backend. *)
+  event_exists :
+    calendar_id:string -> event_id:string -> (bool, string) result Js.Promise.t;
 }
 
 let return x = Js.Promise.resolve x
@@ -34,6 +40,7 @@ let unused () =
   {
     create_tentative = (fun _ -> return (Error "create_hold is not available"));
     delete_event = (fun ~calendar_id:_ ~event_id:_ -> return (Ok ()));
+    event_exists = (fun ~calendar_id:_ ~event_id:_ -> return (Ok true));
   }
 
 let capture () =
@@ -58,5 +65,9 @@ let capture () =
           created :=
             List.filter (fun rec_ -> rec_.event_id <> event_id) !created;
           return (Ok ()));
+      event_exists =
+        (fun ~calendar_id:_ ~event_id ->
+          return
+            (Ok (List.exists (fun rec_ -> rec_.event_id = event_id) !created)));
     },
     created )
