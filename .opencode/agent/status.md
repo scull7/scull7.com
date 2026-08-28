@@ -36,9 +36,9 @@ Boundaries that hold regardless of what the user asks:
 - **Never write the dashboard by hand.** `scripts/status-dashboard` generates it. The
   terminal view is read-only; `--html` writes a file, so only run that when the user
   explicitly asks for the HTML.
-- **Never invent a status.** If a source is missing (no board, no `features.json`),
-  say which one and report what the rest shows. An honest partial answer beats a
-  confident complete one.
+- **Never invent a status.** Pinto (`pinto list --json`) is the only tracker.
+  If `pinto` is missing or the command fails, say so. Do not read `features.json`
+  or parse `.pinto/tasks/*.md`. An honest failure beats a confident guess.
 - **Distinguish the record from the view.** The board and tracking artifacts are the
   truth; the dashboard renders them. When they disagree, say so — that disagreement
   is itself the finding.

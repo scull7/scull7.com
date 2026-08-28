@@ -5,8 +5,8 @@ agent: avril
 
 ## Project preflight (read-only)
 
-Optional tools: `git`, `python3`, `pinto`. Anything missing degrades to a placeholder
-line — the command still runs. Nothing below mutates the repo or the board.
+Optional tools: `git`, `python3`, `pinto`. Pinto is the only board. Missing `pinto`
+prints a placeholder — the command still runs. Nothing below mutates the repo or the board.
 
 Branch and recent commits:
 !`git status -sb 2>/dev/null && git log --oneline -8 2>/dev/null || echo "(no git repository)"`
@@ -14,11 +14,8 @@ Branch and recent commits:
 Progress tail:
 !`tail -n 25 progress.md 2>/dev/null || echo "(no progress.md)"`
 
-Tracked work not yet completed:
-!`python3 -c 'import json;d=json.load(open("features.json"));rows=[(p,c["id"],c["status"],c["title"]) for p,v in d.items() if isinstance(v,dict) for c in v.get("commits",[]) if c.get("status")!="completed"];print("\n".join(f"{p}/{i} [{s}] {t}" for p,i,s,t in rows) or "all tracked commits completed")' 2>/dev/null || echo "(features.json unavailable)"`
-
-Board:
-!`command -v pinto >/dev/null 2>&1 && pinto list --json 2>/dev/null | python3 -c 'import json,sys;d=json.load(sys.stdin);rows=[t for t in (d if isinstance(d,list) else d.get("tasks",[])) if t.get("status")!="done"];print("\n".join("{} [{}] {}".format(t.get("id"),t.get("status"),t.get("title")) for t in rows) or "board clear (no open items)")' || echo "(pinto not on PATH)"`
+Board (`pinto list --json` only):
+!`command -v pinto >/dev/null 2>&1 && pinto list --json 2>/dev/null | python3 -c 'import json,sys;d=json.load(sys.stdin);rows=[t for t in d if isinstance(t,dict) and t.get("status")!="done"];print("\n".join("{} [{}] {}".format(t.get("id"),t.get("status"),t.get("title")) for t in rows) or "board clear (no open items)")' || echo "(pinto not on PATH — install pinto-cli; do not read .pinto/tasks or features.json)"`
 
 Blessed backlog summaries:
 !`ls docs/plans 2>/dev/null | grep blessed || echo "(none)"`
