@@ -28,10 +28,6 @@ jobs:
           node-version: 20
           cache: npm
 
-      # Elm 0.19.1 is what elm.json pins; elm-test-rs drives this same binary.
-      - name: Install Elm
-        run: npm install --no-save elm@0.19.1-6
-
       - name: Cache elm home
         uses: actions/cache@v4
         with:
@@ -56,6 +52,11 @@ jobs:
 
       - name: npm ci
         run: npm ci
+
+      # After npm ci: it prunes node_modules, which would drop this binary.
+      # elm.json pins 0.19.1 and elm-test-rs drives this same compiler.
+      - name: Install Elm
+        run: npm install --no-save elm@0.19.1-6
 
       # Playwright needs a browser before any e2e step runs.
       - name: Install Playwright Chromium
