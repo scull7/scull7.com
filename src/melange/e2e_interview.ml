@@ -2886,6 +2886,146 @@ let prove_t19_mail_fail_after_create () =
     "T-19 AC11 mail-fail-after-create cancels event; token reusable; cap free";
   return ()
 
+(* T-26: the book token is claimed atomically, so a retried or doubled
+   request cannot book twice. This is the shape of the production incident
+   during the T-19 live proof. *)
+let prove_t26_atomic_claim () =
+  let tables = Interview_store.Memory.create () in
+  let store = Interview_store.Memory.bind tables in
+  let tok : Interview_store.token =
+    {
+      token = "tok_claim_me";
+      kind = "book";
+      session_id = "ses_x";
+      expires_at = "2099-01-01T00:00:00.000Z";
+      consumed = false;
+      created_at = "2026-01-01T00:00:00.000Z";
+    }
+  in
+  store.put_token tok >>= fun () ->
+  store.claim_token "tok_claim_me" >>= fun first ->
+  E2e_ffi.assert_ first "T-26 first claim wins";
+  store.claim_token "tok_claim_me" >>= fun second ->
+  E2e_ffi.assert_ (not second) "T-26 second claim loses";
+  store.claim_token "tok_does_not_exist" >>= fun ghost ->
+  E2e_ffi.assert_ (not ghost) "T-26 claiming an unknown token loses";
+  store.release_token "tok_claim_me" >>= fun () ->
+  store.claim_token "tok_claim_me" >>= fun again ->
+  E2e_ffi.assert_ again "T-26 release makes the token claimable again";
+
+  (* Service level: the sibling that lost the claim must refuse, untouched. *)
+  let tables2 = Interview_store.Memory.create () in
+  let store2 = Interview_store.Memory.bind tables2 in
+  ready_hold ~store:store2 ~email:"race@acme.example" ()
+  >>= fun (deps, sent, created, hooks, _id, book) ->
+  let raw =
+    match Interview_token.unsign_token "test-secret-interview-me" book with
+    | Some r -> r
+    | None -> failwith "T-26 could not unsign the book token"
+  in
+  (* The winning sibling claims first. *)
+  store2.claim_token raw >>= fun winner ->
+  E2e_ffi.assert_ winner "T-26 winning sibling claims the token";
+  post_hold deps ~book_token:book () >>= fun res ->
+  json_body res >>= fun (text, _) ->
+  E2e_ffi.assert_
+    (error_name text = "token_invalid")
+    "T-26 the losing sibling is token_invalid";
+  assert_no_touch ~sent ~created ~hooks ~holds:tables2.holds "T-26 loser";
+  E2e_ffi.pass
+    "T-26 book token is claimed atomically; the losing request books nothing";
+  return ()
+
+(* T-27: a hold cancelled in the booking backend must stop counting against
+   the cap, and a flaky probe must not hand out free slots. *)
+let seed_hold tables ~id ~event_id ~domain =
+  let h : Interview_store.hold =
+    {
+      id;
+      session_id = "ses_seed";
+      work_domain = domain;
+      start_at = "2026-09-01T17:00:00.000Z";
+      end_at = "2099-09-01T18:00:00.000Z";
+      status = "tentative";
+      calendar_id = "scull7.com";
+      calendar_event_id = event_id;
+      created_at = "2026-01-01T00:00:00.000Z";
+    }
+  in
+  Hashtbl.replace tables.Interview_store.Memory.holds id h
+
+let probe_port ~answer =
+  {
+    (Interview_calendar.unused ()) with
+    Interview_calendar.event_exists =
+      (fun ~calendar_id:_ ~event_id:_ -> return answer);
+  }
+
+let prove_t27_cap_reconciles () =
+  let cfg = test_cfg [ env "INTERVIEW_HOLD_CAP" "1" ] in
+  let domain = "acme.example" in
+
+  (* A hold whose booking is gone frees its slot and is marked cancelled. *)
+  let tables = Interview_store.Memory.create () in
+  let store = Interview_store.Memory.bind tables in
+  seed_hold tables ~id:"hld_gone" ~event_id:"tok_gone" ~domain;
+  ready_hold ~cfg ~store ~email:("rey@" ^ domain) ()
+  >>= fun (deps, _sent, created, _hooks, _id, book) ->
+  let deps_gone =
+    { deps with Interview_service.calendar = probe_port ~answer:(Ok false) }
+  in
+  post_hold deps_gone ~book_token:book () >>= fun res_gone ->
+  E2e_ffi.assert_
+    (response_status res_gone <> 409)
+    "T-27 a cancelled booking still blocked the cap";
+  E2e_ffi.assert_
+    ((Hashtbl.find tables.holds "hld_gone").status = "cancelled")
+    "T-27 the vanished hold was not marked cancelled";
+  ignore created;
+
+  (* A hold whose booking is live keeps counting. *)
+  let tables2 = Interview_store.Memory.create () in
+  let store2 = Interview_store.Memory.bind tables2 in
+  seed_hold tables2 ~id:"hld_live" ~event_id:"tok_live" ~domain;
+  ready_hold ~cfg ~store:store2 ~email:("rey2@" ^ domain) ()
+  >>= fun (deps2, sent2, created2, hooks2, _id2, book2) ->
+  let deps_live =
+    { deps2 with Interview_service.calendar = probe_port ~answer:(Ok true) }
+  in
+  post_hold deps_live ~book_token:book2 () >>= fun res_live ->
+  json_body res_live >>= fun (text_live, _) ->
+  E2e_ffi.assert_
+    (error_name text_live = "hold_cap")
+    "T-27 a live booking must still consume its cap slot";
+  E2e_ffi.assert_
+    ((Hashtbl.find tables2.holds "hld_live").status = "tentative")
+    "T-27 a live hold must not be marked cancelled";
+  assert_no_touch ~sent:sent2 ~created:created2 ~hooks:hooks2
+    ~holds:(Hashtbl.create 1) "T-27 live";
+
+  (* An errored probe counts as live: a flaky backend cannot free the cap. *)
+  let tables3 = Interview_store.Memory.create () in
+  let store3 = Interview_store.Memory.bind tables3 in
+  seed_hold tables3 ~id:"hld_flaky" ~event_id:"tok_flaky" ~domain;
+  ready_hold ~cfg ~store:store3 ~email:("rey3@" ^ domain) ()
+  >>= fun (deps3, _sent3, _created3, _hooks3, _id3, book3) ->
+  let deps_flaky =
+    { deps3 with
+      Interview_service.calendar = probe_port ~answer:(Error "probe blew up")
+    }
+  in
+  post_hold deps_flaky ~book_token:book3 () >>= fun res_flaky ->
+  json_body res_flaky >>= fun (text_flaky, _) ->
+  E2e_ffi.assert_
+    (error_name text_flaky = "hold_cap")
+    "T-27 a failed probe must not free a cap slot";
+  E2e_ffi.assert_
+    ((Hashtbl.find tables3.holds "hld_flaky").status = "tentative")
+    "T-27 a failed probe must not cancel the hold";
+  E2e_ffi.pass
+    "T-27 cap counts live bookings only; cancelled frees, errored stays taken";
+  return ()
+
 (* T-19 AC12 *)
 let prove_t19_contact_openapi_mcp () =
   let deps = memory_deps () in
@@ -3040,6 +3180,8 @@ let run () =
   >>= (fun () -> prove_t19_mail_fail_after_create ())
   >>= (fun () -> prove_t19b_calrs_client ())
   >>= (fun () -> prove_t19b_slot_unavailable_no_touch ())
+  >>= (fun () -> prove_t26_atomic_claim ())
+  >>= (fun () -> prove_t27_cap_reconciles ())
   >>= (fun () -> prove_t19_contact_openapi_mcp ())
   >>= (fun () ->
          E2e_ffi.console_log "e2e/interview PASS";

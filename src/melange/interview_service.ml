@@ -516,6 +516,23 @@ let env_error msg =
   in
   first tagged
 
+(* A hold cancelled in the booking backend never tells us, so the cap asks
+   before it counts. An existence probe that errors counts as still-live: a
+   flaky backend must not hand out extra slots. *)
+let reconcile_active_holds (deps : deps) domain now_iso =
+  deps.store.active_holds domain now_iso >>= fun holds ->
+  let rec walk live = function
+    | [] -> return live
+    | (h : Interview_store.hold) :: rest ->
+        deps.calendar.event_exists ~calendar_id:h.calendar_id
+          ~event_id:h.calendar_event_id
+        >>= (function
+              | Ok false -> deps.store.cancel_hold h.id >>= fun () -> return live
+              | Ok true | Error _ -> return (live + 1))
+        >>= fun live -> walk live rest
+  in
+  walk 0 holds
+
 let create_hold (deps : deps) ~start ~end_ ~book_token =
   match Interview_config.missing_store deps.cfg with
   | Some name -> err (Missing_env name)
@@ -545,13 +562,22 @@ let create_hold (deps : deps) ~start ~end_ ~book_token =
               | None, None ->
                   let now = deps.now_ms () in
                   let now_iso = Interview_clock.iso_of_ms now in
+                  (* One concurrent caller wins the token; the loser refuses
+                     before touching the calendar. Every refusal below releases
+                     the claim so a refused hold leaves the token usable. *)
+                  let refuse e =
+                    deps.store.release_token book.token >>= fun () -> err e
+                  in
                   catch_store
-                    (deps.store.count_active_holds session.work_domain now_iso
+                    (deps.store.claim_token book.token >>= fun claimed ->
+                     if not claimed then err (Token_invalid "already used")
+                     else
+                     reconcile_active_holds deps session.work_domain now_iso
                      >>= fun n ->
                      if
                        Interview_hold.at_or_over_cap ~active:n
                          ~cap:deps.cfg.hold_cap
-                     then err (Hold_cap deps.cfg.hold_cap)
+                     then refuse (Hold_cap deps.cfg.hold_cap)
                      else
                        let end_iso =
                          Interview_hold.resolve_end ~start_iso ~end_
@@ -574,7 +600,7 @@ let create_hold (deps : deps) ~start ~end_ ~book_token =
                          }
                        in
                        deps.calendar.create_tentative req >>= function
-                       | Error msg -> err (env_error msg)
+                       | Error msg -> refuse (env_error msg)
                        | Ok created -> (
                            match deps.cfg.magic_link_secret with
                            | None ->
@@ -582,7 +608,7 @@ let create_hold (deps : deps) ~start ~end_ ~book_token =
                                  ~calendar_id:created.calendar_id
                                  ~event_id:created.event_id
                                >>= fun _ ->
-                               err (Missing_env "INTERVIEW_MAGIC_LINK_SECRET")
+                               refuse (Missing_env "INTERVIEW_MAGIC_LINK_SECRET")
                            | Some secret ->
                                let ban_addr_raw = deps.random_id () in
                                let ban_dom_raw = deps.random_id () in
@@ -624,11 +650,9 @@ let create_hold (deps : deps) ~start ~end_ ~book_token =
                                    deps.calendar.delete_event
                                      ~calendar_id:created.calendar_id
                                      ~event_id:created.event_id
-                                   >>= fun _ -> err (env_error msg)
+                                   >>= fun _ -> refuse (env_error msg)
                                | Ok _ ->
                                    deps.store.put_hold hold >>= fun () ->
-                                   deps.store.consume_token book.token
-                                   >>= fun () ->
                                    deps.store.put_token
                                      {
                                        token = ban_addr_raw;
