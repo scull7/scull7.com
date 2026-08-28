@@ -10,6 +10,7 @@ module Shell.Model exposing
     , bufferList
     , clearG
     , dummyBuf
+    , fetchResume
     , setMsg
     )
 
@@ -125,3 +126,14 @@ bufferList model =
 
         Nothing ->
             Buffers.core
+
+
+{-| The one place that asks for the resume, so boot and `:reload` cannot
+drift apart.
+-}
+fetchResume : Cmd Msg
+fetchResume =
+    Http.get
+        { url = "/resume.json"
+        , expect = Http.expectJson GotResume Resume.decoder
+        }

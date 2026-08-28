@@ -46,6 +46,7 @@ paletteItems model =
                 [ ( ":help", "Show help", "cmd:help" )
                 , ( ":ls", "List buffers", "cmd:ls" )
                 , ( ":q", "Go home", "cmd:q" )
+                , ( ":reload", "Reload resume.json", "cmd:reload" )
                 , ( ":mail", "Open email", "cmd:mail" )
                 , ( ":terminal", "Live terminal", "cmd:terminal" )
                 , ( ":relay", "Relay viz", "cmd:relay" )

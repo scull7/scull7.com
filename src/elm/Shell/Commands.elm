@@ -57,6 +57,9 @@ runCommand raw model =
                 in
                 ( setMsg list "" m0, Cmd.none )
 
+            "reload" ->
+                ( setMsg "Reloading /resume.json…" "" model, Model.fetchResume )
+
             "q" ->
                 openBuffer "README.md" False model
 

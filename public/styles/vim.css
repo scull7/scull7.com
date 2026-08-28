@@ -711,6 +711,31 @@
   color: #14061a;
 }
 
+.statusline .mode.error {
+  background: var(--accent-red);
+  color: #1a0505;
+}
+
+/* Resume load failure: terminal copy, not a marketing error page. */
+.load-error {
+  padding: 24px 4px;
+  max-width: 62ch;
+}
+
+.load-error-line,
+.load-error-hint {
+  margin: 0 0 8px;
+  line-height: 1.6;
+}
+
+.load-error-line:first-child {
+  color: var(--accent-red);
+}
+
+.load-error-hint {
+  color: var(--text-muted, #8b9bb4);
+}
+
 .statusline .file {
   font-weight: 500;
   opacity: 0.95;
