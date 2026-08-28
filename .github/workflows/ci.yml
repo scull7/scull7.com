@@ -1,0 +1,82 @@
+# T-23 — fail a pull request when the build or any suite is red.
+#
+# Every gate below is the real argv, not a step *named* after one: a step
+# that echoed would pass while the thing it claims to check was broken.
+# No gate softens or discards its exit status, so a non-zero from any one
+# of them fails the whole job.
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: build + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Elm 0.19.1 is what elm.json pins; elm-test-rs drives this same binary.
+      - name: Install Elm
+        run: npm install --no-save elm@0.19.1-6
+
+      - name: Cache elm home
+        uses: actions/cache@v4
+        with:
+          path: ~/.elm
+          key: elm-${{ runner.os }}-${{ hashFiles('elm.json') }}
+          restore-keys: elm-${{ runner.os }}-
+
+      - name: Cache opam
+        uses: actions/cache@v4
+        with:
+          path: ~/.opam
+          key: opam-${{ runner.os }}-${{ hashFiles('scull7.opam', 'dune-project') }}
+          restore-keys: opam-${{ runner.os }}-
+
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: "5.2"
+          dune-cache: true
+
+      - name: Install opam deps
+        run: opam install . --deps-only -y
+
+      - name: npm ci
+        run: npm ci
+
+      # Playwright needs a browser before any e2e step runs.
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: elm make
+        run: npm run elm:make
+
+      - name: melange
+        run: npm run melange
+
+      - name: vite build
+        run: npm run build
+
+      - name: elm tests
+        run: npm run test:elm
+
+      - name: crawlable e2e
+        run: npm run test:t13
+
+      # e2e/run builds (unless SKIP_BUILD), starts vite preview, then spawns
+      # e2e/navigation and the T-22 e2e/keyboard cases.
+      - name: browser e2e
+        run: npm run test:e2e
