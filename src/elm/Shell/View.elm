@@ -8,7 +8,7 @@ import Html.Events as E
 import Resume
 import Shell.Items as Items exposing (updatedMeta, viewBufferItem, viewPaletteItem)
 import Shell.Keyboard as Keyboard exposing (paletteInputKeyDecoder)
-import Shell.Model as Model exposing (Mode(..), Model, Msg(..), activeBuf, bufferList)
+import Shell.Model as Model exposing (Mode(..), Model, Msg(..), PaletteItem, activeBuf, bufferList)
 import Shell.Palette as Palette exposing (paletteItems)
 import Views
 
@@ -16,7 +16,7 @@ view : Model -> Html Msg
 view model =
     case model.loadError of
         Just err ->
-            div [ id "vim-root" ] [ div [ class "buffer-body" ] [ text err ] ]
+            viewLoadFailure model err
 
         Nothing ->
             case model.resume of
@@ -29,6 +29,47 @@ view model =
                 Just data ->
                     viewShell model data
 
+
+{-| A failed resume fetch keeps the shell up. The terminal is the product,
+so the failure is reported in-buffer with the retry command spelled out,
+rather than collapsing to a bare message or a marketing error page. No
+resume data is rendered, so nothing stale can leak through.
+-}
+viewLoadFailure : Model -> String -> Html Msg
+viewLoadFailure model err =
+    div [ id "vim-root" ]
+        [ div [ class "galaxy", A.attribute "aria-hidden" "true" ] []
+        , div [ class "shell" ]
+            [ div
+                [ class "buffer-body"
+                , id "buffer-body"
+                , A.tabindex 0
+                ]
+                [ div [ class "load-error" ]
+                    [ p [ class "load-error-line" ] [ text err ]
+                    , p [ class "load-error-line" ]
+                        [ text "The resume buffer could not be read." ]
+                    , p [ class "load-error-hint" ]
+                        [ text "Type "
+                        , span [ class "kw" ] [ text ":reload" ]
+                        , text " to try again."
+                        ]
+                    ]
+                ]
+            ]
+        , div [ class "bottom-chrome" ]
+            [ footer [ class "statusline" ]
+                [ span [ class "mode error" ] [ text "NORMAL" ]
+                , span [ class "file" ] [ text "resume.json" ]
+                , span [ class "spacer" ] []
+                , span [ class "meta" ] [ span [] [ text "load failed" ] ]
+                ]
+            , div [ class "cmdline" ]
+                [ span [ class "msg error" ] [ text (err ++ " — :reload to retry") ]
+                ]
+            ]
+        , viewPalette model (paletteItems model)
+        ]
 
 viewShell : Model -> Resume.View -> Html Msg
 viewShell model data =
@@ -67,13 +108,6 @@ viewShell model data =
 
             else
                 "buffer-list glass"
-
-        paletteCls =
-            if model.paletteOpen then
-                "palette open"
-
-            else
-                "palette"
 
         cmdlineText =
             if model.paletteOpen then
@@ -167,57 +201,74 @@ viewShell model data =
                     [ text cmdlineText ]
                 ]
             ]
-        , div
-            [ class paletteCls
-            , id "palette"
-            , A.attribute "role" "dialog"
-            , A.attribute "aria-modal" "true"
-            , A.attribute "aria-label" "Command palette"
-            , A.attribute "aria-hidden"
-                (if model.paletteOpen then
-                    "false"
+        , viewPalette model items
+        ]
 
-                 else
-                    "true"
-                )
-            ]
-            [ div [ class "palette-panel glass-strong" ]
-                [ div [ class "palette-input-row" ]
-                    [ span [ class "pfx", A.attribute "aria-hidden" "true" ]
-                        [ text
-                            (if model.paletteMode == "search" then
-                                "/"
 
-                             else
-                                ":"
-                            )
-                        ]
-                    , input
-                        [ id "palette-input"
-                        , A.attribute "autocomplete" "off"
-                        , A.spellcheck False
-                        , A.attribute "aria-label" "Command or search"
-                        , A.attribute "role" "searchbox"
-                        , A.tabindex
-                            (if model.paletteOpen then
-                                0
 
-                             else
-                                -1
-                            )
-                        , A.disabled (not model.paletteOpen)
-                        , A.value model.paletteQuery
-                        , E.onInput PaletteInput
-                        , E.preventDefaultOn "keydown" paletteInputKeyDecoder
-                        ]
-                        []
+{-| The command palette. The shell and the load-failure screen both
+    render it, so `:reload` is reachable even when no resume loaded.
+-}
+viewPalette : Model -> List PaletteItem -> Html Msg
+viewPalette model items =
+    let
+        paletteCls =
+            if model.paletteOpen then
+                "palette open"
+
+            else
+                "palette"
+    in
+    div
+        [ class paletteCls
+        , id "palette"
+        , A.attribute "role" "dialog"
+        , A.attribute "aria-modal" "true"
+        , A.attribute "aria-label" "Command palette"
+        , A.attribute "aria-hidden"
+            (if model.paletteOpen then
+                "false"
+
+             else
+                "true"
+            )
+        ]
+        [ div [ class "palette-panel glass-strong" ]
+            [ div [ class "palette-input-row" ]
+                [ span [ class "pfx", A.attribute "aria-hidden" "true" ]
+                    [ text
+                        (if model.paletteMode == "search" then
+                            "/"
+
+                         else
+                            ":"
+                        )
                     ]
-                , ul
-                    [ class "palette-results"
-                    , A.attribute "role" "listbox"
-                    , A.attribute "aria-label" "Palette results"
+                , input
+                    [ id "palette-input"
+                    , A.attribute "autocomplete" "off"
+                    , A.spellcheck False
+                    , A.attribute "aria-label" "Command or search"
+                    , A.attribute "role" "searchbox"
+                    , A.tabindex
+                        (if model.paletteOpen then
+                            0
+
+                         else
+                            -1
+                        )
+                    , A.disabled (not model.paletteOpen)
+                    , A.value model.paletteQuery
+                    , E.onInput PaletteInput
+                    , E.preventDefaultOn "keydown" paletteInputKeyDecoder
                     ]
-                    (List.indexedMap (viewPaletteItem model) items)
+                    []
                 ]
+            , ul
+                [ class "palette-results"
+                , A.attribute "role" "listbox"
+                , A.attribute "aria-label" "Palette results"
+                ]
+                (List.indexedMap (viewPaletteItem model) items)
             ]
         ]

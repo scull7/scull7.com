@@ -81,7 +81,7 @@
 (melange.emit
  (target e2e)
  (alias site)
- (modules e2e_ffi e2e_agentic e2e_navigation e2e_keyboard e2e_run e2e_t13 e2e_interview e2e_cli)
+ (modules e2e_ffi e2e_agentic e2e_navigation e2e_keyboard e2e_resume e2e_run e2e_t13 e2e_interview e2e_cli)
  (libraries negotiate interview melange.js melange.node)
  (preprocess
   (pps melange.ppx))
