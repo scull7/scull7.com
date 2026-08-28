@@ -2,7 +2,7 @@
   "name": "scull7.com",
   "private": true,
   "version": "0.4.0",
-  "description": "Nathan Sculli resume site — Elm · Melange ports · glassmorphic galaxy · vim UX",
+  "description": "Nathan Sculli resume site \u2014 Elm \u00b7 Melange ports \u00b7 glassmorphic galaxy \u00b7 vim UX",
   "type": "module",
   "scripts": {
     "melange": "opam exec -- dune build @site && node _build/default/src/melange/artifacts/src/melange/emit_artifacts.cjs",
@@ -20,6 +20,7 @@
     "test:e2e": "npm run melange && npm run e2e -- run",
     "test:e2e:only": "npm run melange && npm run e2e -- navigation",
     "test:t13": "npm run melange && npm run e2e -- t13",
+    "test:elm": "elm-test-rs --compiler \"$(volta which elm 2>/dev/null || command -v elm)\"",
     "test:agentic": "npm run melange && npm run e2e -- agentic",
     "test:interview": "npm run melange && npm run e2e -- interview",
     "test": "npm run elm:make && npm run test:t13 && SKIP_BUILD=1 npm run test:agentic && SKIP_BUILD=1 npm run test:e2e && SKIP_BUILD=1 npm run test:interview"
@@ -30,6 +31,8 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.0",
+    "elm-test": "^0.19.2-1",
+    "elm-test-rs": "^3.2.0-0",
     "playwright": "^1.49.0",
     "vite": "^6.0.0",
     "vite-plugin-elm": "^3.0.1"
