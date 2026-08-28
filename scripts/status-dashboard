@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """status-dashboard — the in-harness orchestration UI.
 
-Renders work completed / in progress / todo from the harness's own tracking
-artifacts, so an orchestrator (AVRIL, AXEL, rust-team-lead, or a generated
-orchestrator prompt) can refresh a single view as it makes progress.
+Renders work completed / in progress / todo from `pinto list --json`.
+Pinto is the only project-management source of truth. This script never
+reads features.json and never parses `.pinto/tasks/*.md`.
 
 Usage:
     scripts/status-dashboard                 # terminal summary
@@ -13,19 +13,9 @@ Usage:
     scripts/status-dashboard --root DIR      # project root (default: repo root)
     scripts/status-dashboard --config PATH   # tracker config (default: dashboard.config.json)
 
-Sources, all optional and read-only — a missing one degrades to empty:
-    features.json      phases -> commits -> features
-    pinto list --json  board items, when pinto is installed
-    progress.md        tail, for the last recorded activity
+progress.md is an optional narrative tail, not a tracker.
 
-A project whose tracker uses different words or a different board CLI supplies
-`dashboard.config.json` (see DEFAULT_CONFIG below). Without one, the defaults
-above apply unchanged. The board command is run as an argv list, never through a
-shell, so a config cannot inject shell syntax — but it does name a program this
-script will execute, so treat it with the same trust as a justfile.
-
-Structure follows the repo's own philosophy: reading sources are actions,
-everything that shapes or renders the model is a pure calculation.
+The board command is run as an argv list, never through a shell.
 """
 
 from __future__ import annotations
@@ -43,14 +33,15 @@ from pathlib import Path
 DONE = "done"
 ACTIVE = "active"
 TODO = "todo"
+BOARD_SOURCE = "pinto list --json"
 
 DEFAULT_CONFIG = {
+    "project": "",
     # Status vocabularies. Anything unmatched is todo, so only done and active
     # need listing. Compared case-insensitively with -/_/space normalised.
     "status_map": {
-        "done": ["completed", "complete", "done", "verified", "merged", "shipped"],
-        "active": ["in progress", "inprogress", "building", "built", "review",
-                   "in review", "started", "wip", "regressed"],
+        "done": ["done"],
+        "active": ["in-progress", "review"],
     },
     # Board source. `command` is an argv list, run without a shell.
     # `items_path` walks into the payload; "" means the payload is the list.
@@ -60,7 +51,6 @@ DEFAULT_CONFIG = {
         "items_path": "",
         "fields": {"id": "id", "title": "title", "status": "status"},
     },
-    "features_file": "features.json",
     "progress_file": "progress.md",
 }
 
@@ -79,6 +69,7 @@ def load_config(root: Path, path: str | None) -> dict:
         return DEFAULT_CONFIG
     raw = json.loads(candidate.read_text())
     cfg = {**DEFAULT_CONFIG, **raw}
+    cfg.pop("features_file", None)
     cfg["status_map"] = {**DEFAULT_CONFIG["status_map"], **raw.get("status_map", {})}
     cfg["board"] = {**DEFAULT_CONFIG["board"], **raw.get("board", {})}
     cfg["board"]["fields"] = {**DEFAULT_CONFIG["board"]["fields"],
@@ -99,36 +90,6 @@ def classify(status: str, status_map: dict | None = None) -> str:
     return TODO
 
 
-def phases_from_features(features: dict, status_map: dict | None = None) -> list[dict]:
-    """Shape features.json into ordered phases with per-commit classification."""
-    phases = []
-    for name, body in features.items():
-        if not isinstance(body, dict):
-            continue
-        commits = [c for c in body.get("commits", []) if isinstance(c, dict)]
-        items = [
-            {
-                "id": c.get("id", "?"),
-                "title": c.get("title", ""),
-                "state": classify(c.get("status", ""), status_map),
-                "features": len(c.get("features") or []),
-            }
-            for c in commits
-        ]
-        done = sum(1 for i in items if i["state"] == DONE)
-        phases.append({
-            "name": name,
-            "state": classify(body.get("status", ""), status_map),
-            "items": items,
-            "done": done,
-            "total": len(items),
-            "percent": round(100 * done / len(items)) if items else (
-                100 if classify(body.get("status", ""), status_map) == DONE else 0),
-        })
-    phases.sort(key=lambda p: ({DONE: 2, ACTIVE: 0, TODO: 1}[p["state"]], p["name"]))
-    return phases
-
-
 def dig(node: object, path: str) -> object:
     """Follow a dotted key path. Trackers nest (GitHub Projects puts title under content)."""
     for key in [k for k in (path or "").split(".") if k]:
@@ -140,11 +101,11 @@ def dig(node: object, path: str) -> object:
 
 def board_items(raw: object, board_cfg: dict | None = None,
                 status_map: dict | None = None) -> list[dict]:
-    """Shape any board payload into items, per the config's path and field names."""
+    """Shape a pinto list --json payload into items, per the config's path and field names."""
     cfg = board_cfg or DEFAULT_CONFIG["board"]
-    node = dig(raw, cfg.get("items_path") or "") if cfg.get("items_path") else None
-    if node is None:
-        node = raw if isinstance(raw, list) else (raw or {}).get("tasks", [])
+    node = dig(raw, cfg.get("items_path") or "") if cfg.get("items_path") else raw
+    if not isinstance(node, list):
+        raise ValueError("pinto list --json must return a JSON array of tasks")
     f = cfg.get("fields", DEFAULT_CONFIG["board"]["fields"])
     return [
         {
@@ -157,34 +118,30 @@ def board_items(raw: object, board_cfg: dict | None = None,
     ]
 
 
-# Kept so existing callers and tests keep working.
 def board_from_pinto(raw: object) -> list[dict]:
     return board_items(raw)
 
 
-def totals(phases: list[dict], board: list[dict]) -> dict:
-    """Count units of work by state. Board items win when both are present."""
-    units = board if board else [i for p in phases for i in p["items"]]
+def totals(board: list[dict]) -> dict:
+    """Count board items by classified state. Board is the only work source."""
     return {
-        DONE: sum(1 for u in units if u["state"] == DONE),
-        ACTIVE: sum(1 for u in units if u["state"] == ACTIVE),
-        TODO: sum(1 for u in units if u["state"] == TODO),
-        "source": "board" if board else "features.json",
+        DONE: sum(1 for u in board if u["state"] == DONE),
+        ACTIVE: sum(1 for u in board if u["state"] == ACTIVE),
+        TODO: sum(1 for u in board if u["state"] == TODO),
+        "source": BOARD_SOURCE,
     }
 
 
-def build_model(features: dict, pinto_raw: object, progress_tail: str,
+def build_model(pinto_raw: object, progress_tail: str,
                 project: str, generated: str, config: dict | None = None) -> dict:
     cfg = config or DEFAULT_CONFIG
     sm = cfg.get("status_map")
-    phases = phases_from_features(features, sm)
     board = board_items(pinto_raw, cfg.get("board"), sm)
     return {
         "project": project,
         "generated": generated,
-        "phases": phases,
         "board": board,
-        "totals": totals(phases, board),
+        "totals": totals(board),
         "progress_tail": progress_tail,
     }
 
@@ -192,7 +149,6 @@ def build_model(features: dict, pinto_raw: object, progress_tail: str,
 # ------------------------------------------------------------------- rendering
 
 MARK = {DONE: "✔", ACTIVE: "▶", TODO: "○"}
-LABEL = {DONE: "completed", ACTIVE: "in progress", TODO: "todo"}
 
 
 def render_terminal(model: dict) -> str:
@@ -207,18 +163,6 @@ def render_terminal(model: dict) -> str:
         f"    {MARK[TODO]} todo {t[TODO]:>3}"
         f"    (from {t['source']})",
     ]
-
-    if model["phases"]:
-        out += ["", "  PHASES"]
-        for p in model["phases"]:
-            bar_len = 16
-            filled = round(bar_len * p["percent"] / 100)
-            bar = "█" * filled + "·" * (bar_len - filled)
-            out.append(f"    {MARK[p['state']]} {p['name'][:34]:<34} "
-                       f"{bar} {p['done']}/{p['total']}")
-            for i in p["items"]:
-                if i["state"] != DONE:
-                    out.append(f"        {MARK[i['state']]} {i['id']}  {i['title'][:52]}")
 
     open_items = [b for b in model["board"] if b["state"] != DONE]
     if open_items:
@@ -256,24 +200,9 @@ def _cards(items: list[dict], state: str) -> str:
 
 def render_html(model: dict) -> str:
     t = model["totals"]
-    units = model["board"] or [i for p in model["phases"] for i in p["items"]]
+    units = model["board"]
     by = {s: [u for u in units if u["state"] == s] for s in (DONE, ACTIVE, TODO)}
     total = max(len(units), 1)
-
-    phase_rows = "".join(
-        f'<div class="py-3 border-b border-zinc-800/60 last:border-0">'
-        f'<div class="flex items-center justify-between gap-4">'
-        f'<div class="flex items-center gap-2 min-w-0">'
-        f'<i class="fa-solid {"fa-check text-emerald-400" if p["state"] == DONE else ("fa-play text-amber-400" if p["state"] == ACTIVE else "fa-circle text-zinc-600")} text-xs"></i>'
-        f'<span class="text-sm text-zinc-200 truncate">{html.escape(p["name"])}</span>'
-        f'</div>'
-        f'<span class="text-xs text-zinc-500 tabular-nums shrink-0">{p["done"]}/{p["total"]}</span>'
-        f'</div>'
-        f'<div class="h-1.5 bg-zinc-800 rounded-full mt-2 overflow-hidden">'
-        f'<div class="h-full rounded-full {"bg-emerald-500" if p["percent"] == 100 else "bg-amber-500"}" style="width:{p["percent"]}%"></div>'
-        f'</div></div>'
-        for p in model["phases"]
-    ) or '<div class="text-sm text-zinc-600 italic">no features.json phases</div>'
 
     def pct(n): return round(100 * n / total)
 
@@ -332,11 +261,6 @@ def render_html(model: dict) -> str:
     </div>
   </div>
 
-  <div class="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-6 mb-6">
-    <div class="text-xs uppercase tracking-widest text-zinc-500 mb-3">Phases</div>
-    {phase_rows}
-  </div>
-
   <div class="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-6">
     <div class="text-xs uppercase tracking-widest text-zinc-500 mb-3">Last recorded activity</div>
     <pre class="text-xs text-zinc-400 whitespace-pre-wrap font-mono leading-relaxed">{html.escape(model['progress_tail'] or '(no progress.md)')}</pre>
@@ -354,30 +278,34 @@ def render_html(model: dict) -> str:
 
 # ----------------------------------------------------------------- actions/io
 
-def read_features(root: Path, filename: str = "features.json") -> dict:
-    try:
-        data = json.loads((root / filename).read_text())
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
+class BoardError(Exception):
+    """The configured board command did not produce a usable payload."""
 
 
 def read_board(root: Path, board_cfg: dict) -> object:
-    """Run the configured board command as argv (never through a shell)."""
+    """Run the configured board command as argv (never through a shell). Fail loud."""
     cmd = board_cfg.get("command") or []
-    if not cmd or not shutil.which(cmd[0]):
-        return None
+    if not cmd:
+        raise BoardError("dashboard config has no board.command")
+    if not shutil.which(cmd[0]):
+        raise BoardError(f"{cmd[0]} is not on PATH; install pinto-cli to read the board")
     try:
         done = subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=20)
-        return json.loads(done.stdout) if done.returncode == 0 else None
-    except Exception:
-        return None
+    except OSError as exc:
+        raise BoardError(f"could not run {' '.join(cmd)}: {exc}") from exc
+    if done.returncode != 0:
+        err = (done.stderr or done.stdout or "").strip() or f"exit {done.returncode}"
+        raise BoardError(f"{' '.join(cmd)} failed: {err}")
+    try:
+        return json.loads(done.stdout)
+    except json.JSONDecodeError as exc:
+        raise BoardError(f"{' '.join(cmd)} did not return JSON: {exc}") from exc
 
 
 def read_progress_tail(root: Path, filename: str = "progress.md", lines: int = 12) -> str:
     try:
         return "\n".join((root / filename).read_text().splitlines()[-lines:])
-    except Exception:
+    except OSError:
         return ""
 
 
@@ -394,18 +322,22 @@ def main() -> int:
     root = Path(args.root).resolve()
     try:
         cfg = load_config(root, args.config)
-    except Exception as exc:
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
         print(f"  dashboard config is invalid: {exc}", file=sys.stderr)
         return 2
 
-    model = build_model(
-        features=read_features(root, cfg.get("features_file", "features.json")),
-        pinto_raw=read_board(root, cfg.get("board", DEFAULT_CONFIG["board"])),
-        progress_tail=read_progress_tail(root, cfg.get("progress_file", "progress.md")),
-        project=root.name,
-        generated=_datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-        config=cfg,
-    )
+    try:
+        pinto_raw = read_board(root, cfg.get("board", DEFAULT_CONFIG["board"]))
+        model = build_model(
+            pinto_raw=pinto_raw,
+            progress_tail=read_progress_tail(root, cfg.get("progress_file", "progress.md")),
+            project=cfg.get("project") or root.name,
+            generated=_datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+            config=cfg,
+        )
+    except (BoardError, ValueError) as exc:
+        print(f"  {exc}", file=sys.stderr)
+        return 2
 
     if args.html or args.html_only:
         out = Path(args.out)
