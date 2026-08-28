@@ -38,10 +38,7 @@ init flags =
       , focusReturn = "buffer-list"
       , isMobile = flags.isMobile
       }
-    , Http.get
-        { url = "/resume.json"
-        , expect = Http.expectJson GotResume Resume.decoder
-        }
+    , Model.fetchResume
     )
 
 
@@ -52,10 +49,17 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         GotResume (Ok doc) ->
-            ( { model | resume = Just (Resume.mapResume doc) }, Cmd.none )
+            ( { model | resume = Just (Resume.mapResume doc), loadError = Nothing }
+            , Cmd.none
+            )
 
         GotResume (Err _) ->
-            ( { model | loadError = Just "Failed to load resume.json" }, Cmd.none )
+            ( { model
+                | loadError = Just "E484: Can't open file /resume.json"
+                , resume = Nothing
+              }
+            , Cmd.none
+            )
 
         ToggleBuffers ->
             ( { model | buffersCollapsed = not model.buffersCollapsed }, Cmd.none )

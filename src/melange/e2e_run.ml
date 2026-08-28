@@ -1,4 +1,4 @@
-(* Build (optional) + vite preview + navigation and keyboard e2e. *)
+(* Build (optional) + vite preview + navigation, keyboard, and resume e2e. *)
 
 let port = E2e_ffi.env_or "PORT" "4173"
 let base = "http://127.0.0.1:" ^ port
@@ -72,6 +72,11 @@ let run () =
          E2e_ffi.console_log "→ e2e/keyboard";
          run_inherit
            [ E2e_ffi.self (); "keyboard" ]
+           (E2e_ffi.env_with "BASE_URL" base))
+  |> Js.Promise.then_ (fun () ->
+         E2e_ffi.console_log "→ e2e/resume";
+         run_inherit
+           [ E2e_ffi.self (); "resume" ]
            (E2e_ffi.env_with "BASE_URL" base))
   |> Js.Promise.then_ (fun () ->
          E2e_ffi.console_log "e2e/run PASS";

@@ -2,7 +2,7 @@
 
 let usage () =
   Js.Console.error
-    "usage: e2e_cli.cjs <agentic|navigation|keyboard|run|t13|interview>";
+    "usage: e2e_cli.cjs <agentic|navigation|keyboard|resume|run|t13|interview>";
   Node.Process.exit 1
 
 let () =
@@ -12,6 +12,7 @@ let () =
   | "agentic" -> E2e_agentic.run ()
   | "navigation" -> E2e_navigation.run ()
   | "keyboard" -> E2e_keyboard.run ()
+  | "resume" -> E2e_resume.run ()
   | "run" -> E2e_run.run ()
   | "t13" -> E2e_t13.run ()
   | "interview" -> E2e_interview.run ()
