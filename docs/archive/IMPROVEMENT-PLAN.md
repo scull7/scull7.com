@@ -1,5 +1,12 @@
 # scull7.com — Top 5 Improvement Plan
 
+> **ARCHIVED — historical, not live guidance.**
+> This document is from the MoonBit/Luna era of scull7.com and describes a stack the
+> site no longer uses. The live stack is **Elm 0.19.1 for the UI and Melange 7
+> (OCaml → JS) for ports, build tooling, and e2e** — see [`README.md`](../../README.md)
+> and [`docs/ROADMAP.md`](../ROADMAP.md). Kept for provenance only; do not implement
+> from it.
+
 **Date:** 2026-07-18  
 **Scope:** Full-site review after MoonBit + Luna port  
 **Goal:** Make the site more maintainable, accessible, polished, testable, and “vim-true”

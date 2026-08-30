@@ -1,8 +1,15 @@
 # Implementation Guidelines — Item 1: Modularize shell + content routing
 
+> **ARCHIVED — historical, not live guidance.**
+> This document is from the MoonBit/Luna era of scull7.com and describes a stack the
+> site no longer uses. The live stack is **Elm 0.19.1 for the UI and Melange 7
+> (OCaml → JS) for ports, build tooling, and e2e** — see [`README.md`](../../README.md)
+> and [`docs/ROADMAP.md`](../ROADMAP.md). Kept for provenance only; do not implement
+> from it.
+
 **For:** context-free implementer  
 **Repo:** `/Users/nathansculli/src/scull7.com`  
-**Plan ref:** `docs/IMPROVEMENT-PLAN.md` §1  
+**Plan ref:** `docs/archive/IMPROVEMENT-PLAN.md` §1  
 **Architect date:** 2026-07-18
 
 ---

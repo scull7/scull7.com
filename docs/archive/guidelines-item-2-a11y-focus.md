@@ -1,7 +1,14 @@
 # Implementation Guidelines — Item 2: Accessibility & focus management
 
+> **ARCHIVED — historical, not live guidance.**
+> This document is from the MoonBit/Luna era of scull7.com and describes a stack the
+> site no longer uses. The live stack is **Elm 0.19.1 for the UI and Melange 7
+> (OCaml → JS) for ports, build tooling, and e2e** — see [`README.md`](../../README.md)
+> and [`docs/ROADMAP.md`](../ROADMAP.md). Kept for provenance only; do not implement
+> from it.
+
 **Repo:** `/Users/nathansculli/src/scull7.com`  
-**Plan:** `docs/IMPROVEMENT-PLAN.md` §2
+**Plan:** `docs/archive/IMPROVEMENT-PLAN.md` §2
 
 ---
 
@@ -28,7 +35,7 @@ Make the vim resume shell keyboard-accessible and AT-friendly: palette focuses o
 | `src/view_home.mbt` | Optional: ensure h1 stays plain text (CSS handles fallback) |
 | `public/styles/vim.css` | Hero h1 fallback; reduced-motion for packets; focus ring polish; palette dialog styles if needed |
 | `public/styles/galaxy.css` | Ensure twinkle disabled under reduced-motion (extend existing block) |
-| `docs/verification-item-2.md` | Write after implement (verifier) |
+| `docs/archive/verification-item-2.md` | Write after implement (verifier) |
 
 Optional small module: `src/shell_focus.mbt` with focus helpers only — keep flat under `src/`.
 

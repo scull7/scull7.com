@@ -1,7 +1,14 @@
 # Implementation Guidelines — Item 5: Vim command UX authenticity
 
+> **ARCHIVED — historical, not live guidance.**
+> This document is from the MoonBit/Luna era of scull7.com and describes a stack the
+> site no longer uses. The live stack is **Elm 0.19.1 for the UI and Melange 7
+> (OCaml → JS) for ports, build tooling, and e2e** — see [`README.md`](../../README.md)
+> and [`docs/ROADMAP.md`](../ROADMAP.md). Kept for provenance only; do not implement
+> from it.
+
 **Repo:** `/Users/nathansculli/src/scull7.com`  
-**Plan:** `docs/IMPROVEMENT-PLAN.md` §5  
+**Plan:** `docs/archive/IMPROVEMENT-PLAN.md` §5  
 **Product choice:** **Option B (palette-primary)** + light hybrid cmdline echo  
 (Default from plan / prior kickoff. Full bottom cmdline editor = follow-up.)
 
@@ -30,7 +37,7 @@ Make command/search UX predictable and more vim-like without rewriting chrome: p
 | `src/shell_app.mbt` | g timeout, Esc synonyms, fuzzy items, cmdline mirror, terminal guard, Ctrl-f/b, palette j/k |
 | `src/view_help.mbt` | Mode diagram + expanded keys |
 | `README.md` | Align mode table |
-| `docs/verification-item-5.md` | After implement |
+| `docs/archive/verification-item-5.md` | After implement |
 | `e2e/navigation.mjs` | Optional: g-timeout or cmdline mirror smoke |
 
 ---

@@ -33,20 +33,21 @@ A personal resume / portfolio presented as a **vim-inspired IDE shell**:
 |------|--------|
 | https://scull7.com | **200** — serving Elm build (asset hash matches post–PR #2) |
 | PR #2 Elm + ReScript rewrite | **Merged** to `main` (`89c7e22`) |
-| Local branch `feat/elm-rescript-rewrite` | Behind `main` merge; **has uncommitted Melange migration** |
-| Netlify build | Elm + ReScript path on `main`; Melange Netlify path only in local WIP |
+| Melange migration | **Shipped** — on `main` and building on Netlify (ReScript is gone) |
+| Netlify build | Elm + Melange via opam/Dune, plus the interview-me function and the negotiate edge function |
 
-### 2.2 Stack (intended / in-flight)
+### 2.2 Stack (live)
 
-| Layer | On `main` (live) | Local WIP (uncommitted) |
-|-------|------------------|-------------------------|
-| UI / state / HTTP | Elm 0.19.1 | same |
-| Ports / bootstrap | ReScript 11 | **Melange 7** + Dune + opam |
-| Bundler | Vite + vite-plugin-elm | same |
-| CSS | `public/styles/{galaxy,vim}.css` | same |
-| Data | `public/resume.json` | same |
+| Layer | On `main` (live) |
+|-------|------------------|
+| UI / state / HTTP | Elm 0.19.1 (`src/elm/`, split into `Shell.*` by T-20) |
+| Ports / bootstrap / tooling / e2e | **Melange 7** + Dune + opam (`src/melange/`) |
+| Bundler | Vite + vite-plugin-elm |
+| CSS | `public/styles/{galaxy,vim}.css` |
+| Data | `public/resume.json` |
 
-**Local WIP reality:** Melange builds and e2e were green in session; not yet committed/PRd. Until that lands, treat ReScript as production and Melange as the next ship.
+**Not MoonBit, not ReScript.** Both are historical; MoonBit-era documents live in
+[`docs/archive/`](archive/README.md).
 
 ### 2.3 Feature inventory
 
@@ -81,7 +82,7 @@ A personal resume / portfolio presented as a **vim-inspired IDE shell**:
 ```
 Browser
   └─ Vite entry (main.js)
-       └─ Melange main.ml  [WIP]  or  ReScript Main.res  [main]
+       └─ Melange main.ml
             ├─ Elm.Main.init(flags)
             ├─ ports: focus | blur | scrollBuffer
             └─ capture keydown preventDefault
@@ -97,8 +98,8 @@ Elm
 1. **Deploy toolchain weight** — Melange needs opam switch on Netlify; cold builds will be slow/fragile without caching `_opam`.
 2. **God-module `Main.elm`** — high regression cost for keyboard/palette (already bitten twice).
 3. **SEO / shareability** — recruiters and OG scrapers get thin HTML.
-4. **Docs drift** — `docs/IMPROVEMENT-PLAN.md` still describes MoonBit; verifications are historical.
-5. **Branch hygiene** — Melange work uncommitted on a branch whose name still says rescript; `main` is ahead via merge commit.
+4. ~~**Docs drift** — `docs/IMPROVEMENT-PLAN.md` still describes MoonBit; verifications are historical.~~ Resolved 2026-08-28 (T-25): moved to [`docs/archive/`](archive/README.md) and banner-labelled.
+5. ~~**Branch hygiene** — Melange work uncommitted on a branch whose name still says rescript.~~ Resolved: Melange is merged and `main` is the source of truth.
 
 ---
 
@@ -106,7 +107,7 @@ Elm
 
 | Goal | Success signal |
 |------|----------------|
-| **Reliable platform** | Melange (or deliberate ReScript stay) on `main`; Netlify green & cached; CI on PR |
+| **Reliable platform** | Melange on `main` (**done**); Netlify green; CI on PR (**done**, T-23) |
 | **Recruiter-grade first paint** | Readable resume without JS; solid OG; optional print CSS |
 | **Delightful vim shell** | Deep links, history, more authentic cmdline without breaking a11y |
 | **Content leverage** | Resume.json remains SoT; optional posts/projects without CMS |
@@ -123,7 +124,7 @@ Elm
 | 0.1 | Commit Melange migration; rename branch/PR to `feat/elm-melange-ports` | WIP is the real stack direction |
 | 0.2 | Netlify: cache `~/.opam` + project `_opam`; fail fast with clear logs | Avoid 10–20m cold builds / timeouts |
 | 0.3 | Smoke: production deploy checklist (home, exp, `:`, Esc, terminal focus) | Keyboard regressions are high cost |
-| 0.4 | Archive/relabel MoonBit docs (`docs/archive/…`) + point README at Melange | Stop agent confusion |
+| 0.4 | ~~Archive/relabel MoonBit docs~~ **done (T-25)** — see [`docs/archive/`](archive/README.md); README already points at Melange | Stop agent confusion |
 
 **Exit:** Melange on `main`, scull7.com green, docs match stack.
 
@@ -245,7 +246,7 @@ Later      Phase 5 as content ideas appear
 
 | Decision | Options | Recommendation |
 |----------|---------|----------------|
-| Ports language | Stay ReScript vs Melange | **Melange** (matches OCaml story; already implemented locally) |
+| Ports language | Stay ReScript vs Melange | **Melange** (matches the OCaml story) — shipped on `main` |
 | Framework vs site | Monorepo vs extract | **Extract later (T-14):** public open-source framework repo; private scull7.com depends on it. See [`docs/FRAMEWORK-EXTRACT.md`](FRAMEWORK-EXTRACT.md). Do not extract in the current rewrite. |
 | Interview-me v1 | Practice vs recruiter-agent; stub vs real API | **Recruiter agents interviewing Nathan (T-15):** named sessions + booking request, cited answers, work-email verify before a tentative calendar hold. Real OpenAPI / MCP / webhooks; company OAuth later. See [`docs/INTERVIEW-ME.md`](INTERVIEW-ME.md). Do not implement in the spec PR. |
 | Routing style | hash vs path | **hash first** (`#/experience`) then path if SEO needs it |
@@ -263,7 +264,7 @@ Later      Phase 5 as content ideas appear
 5. **Build step** inject noscript resume blurb + JSON-LD into `index.html`.  
 6. **Print CSS** for linear CV.  
 7. **CI workflow** `.github/workflows/ci.yml`.  
-8. **Archive** MoonBit improvement docs; leave one pointer in ROADMAP.  
+8. ~~**Archive** MoonBit improvement docs; leave one pointer in ROADMAP.~~ **Done (T-25)** — [`docs/archive/`](archive/README.md).  
 9. **T-14 (later):** public framework repo; private scull7.com site that depends on it.  
 10. **T-15 (later):** interview-me v1 — recruiter-agent sessions, cited Q&A, verified calendar hold.
 

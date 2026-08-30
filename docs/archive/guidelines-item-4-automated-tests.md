@@ -1,7 +1,14 @@
 # Implementation Guidelines — Item 4: Automated tests
 
+> **ARCHIVED — historical, not live guidance.**
+> This document is from the MoonBit/Luna era of scull7.com and describes a stack the
+> site no longer uses. The live stack is **Elm 0.19.1 for the UI and Melange 7
+> (OCaml → JS) for ports, build tooling, and e2e** — see [`README.md`](../../README.md)
+> and [`docs/ROADMAP.md`](../ROADMAP.md). Kept for provenance only; do not implement
+> from it.
+
 **Repo:** `/Users/nathansculli/src/scull7.com`  
-**Plan:** `docs/IMPROVEMENT-PLAN.md` §4
+**Plan:** `docs/archive/IMPROVEMENT-PLAN.md` §4
 
 ---
 
@@ -31,7 +38,7 @@ Add unit tests (`moon test`) for pure format/map helpers and a plain-JS Playwrig
 | `e2e/run.mjs` or npm scripts | start preview, run tests, exit code |
 | `package.json` | `test`, `test:unit`, `test:e2e` |
 | `README.md` | How to run tests |
-| `docs/verification-item-4.md` | After implement |
+| `docs/archive/verification-item-4.md` | After implement |
 
 **Fixture approach:** Prefer constructing `ResumeDoc` structs in MoonBit (no filesystem in JS tests) rather than loading `src/testdata/*.json` unless `@json.parse` of a string literal is clean. Optional: embed a small JSON string and `@json.from_json(@json.parse(...))` if that API is available.
 

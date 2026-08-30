@@ -1,7 +1,14 @@
 # Implementation Guidelines — Item 3: Visual polish (hero, code, glass hierarchy)
 
+> **ARCHIVED — historical, not live guidance.**
+> This document is from the MoonBit/Luna era of scull7.com and describes a stack the
+> site no longer uses. The live stack is **Elm 0.19.1 for the UI and Melange 7
+> (OCaml → JS) for ports, build tooling, and e2e** — see [`README.md`](../../README.md)
+> and [`docs/ROADMAP.md`](../ROADMAP.md). Kept for provenance only; do not implement
+> from it.
+
 **Repo:** `/Users/nathansculli/src/scull7.com`  
-**Plan:** `docs/IMPROVEMENT-PLAN.md` §3
+**Plan:** `docs/archive/IMPROVEMENT-PLAN.md` §3
 
 ---
 
@@ -29,7 +36,7 @@ Make the resume site feel deliberately designed: reliable hero typography, synta
 | `src/view_relay.mbt` | `aria-label` / caption on canvas; keep decorative packets |
 | `public/styles/vim.css` | Hero depth, buffer hierarchy, mobile 44px rows, code block polish, section rhythm, optional enter fade |
 | `public/styles/galaxy.css` | Opaque glass fallback if needed; enter animation respect reduced-motion |
-| `docs/verification-item-3.md` | After implement |
+| `docs/archive/verification-item-3.md` | After implement |
 
 Keep `code_sample` strings in `buffers.mbt` as source text (highlighter consumes them).
 
