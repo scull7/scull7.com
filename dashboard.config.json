@@ -1,0 +1,16 @@
+{
+  "project": "scull7.com",
+  "status_map": {
+    "done": ["done"],
+    "active": ["in-progress", "review"]
+  },
+  "board": {
+    "command": ["pinto", "list", "--json"],
+    "items_path": "",
+    "fields": {
+      "id": "id",
+      "title": "title",
+      "status": "status"
+    }
+  }
+}
